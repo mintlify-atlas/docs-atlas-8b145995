@@ -1,0 +1,153 @@
+---
+title: "SCALF CLI: Commands and Global Flags"
+sidebarTitle: "Overview"
+description: "The scalf CLI provides commands to run, format, type-check, test, and build SCALF scripts. All commands and global flags are covered here."
+---
+
+The `scalf` CLI is the single entry-point for everything in a SCALF workflow — running scripts, formatting source files, checking types, executing inline tests, compiling to standalone binaries, and launching the interactive REPL. Install the `scalf` binary, and the entire toolchain is available without any additional setup.
+
+## Commands
+
+<CardGroup cols={2}>
+  <Card title="scalf &lt;file&gt;" icon="play" href="/cli/run">
+    Execute a `.scl` script or a pre-compiled `.sclc` bytecode cache file. The default action when a file path is provided.
+  </Card>
+  <Card title="scalf fmt" icon="paintbrush" href="/cli/fmt">
+    Automatically format a SCALF source file in-place. Use `--check` in CI to verify formatting without writing changes.
+  </Card>
+  <Card title="scalf check" icon="circle-check" href="/cli/check">
+    Run the type checker and linter on a script without executing it. Reports errors and warnings with file and line context.
+  </Card>
+  <Card title="scalf test" icon="flask" href="/cli/test">
+    Execute all `test` blocks defined in a script. Reports `PASS` / `FAIL` per case and exits non-zero on any failure.
+  </Card>
+  <Card title="scalf build" icon="box" href="/cli/build">
+    Compile a script into a self-contained native binary. Supports cross-compilation via target aliases or raw Rust target triples.
+  </Card>
+  <Card title="scalf cache" icon="database" href="/cli/build#cache">
+    Compile a script to a `.sclc` bytecode cache file that can be executed directly with `scalf &lt;file&gt;.sclc`.
+  </Card>
+  <Card title="scalf startup" icon="gauge" href="/cli/build#startup">
+    Benchmark the parse and type-check time of a script. Supports an optional millisecond budget that fails CI if not met.
+  </Card>
+  <Card title="scalf docs" icon="book" href="/cli/overview#docs">
+    Generate the stdlib reference documentation as a Markdown file.
+  </Card>
+  <Card title="scalf (no args)" icon="terminal" href="/cli/repl">
+    Launch the interactive REPL with syntax highlighting, tab completion, persistent history, and inline docs.
+  </Card>
+</CardGroup>
+
+## Global Flags
+
+The following flags are accepted by `scalf <file>` (the run command) and by `scalf test`. They control the runtime permission sandbox.
+
+<ParamField query="--allow-read" type="string">
+  Grant the script read access to the specified file-system paths. Accepts a comma-separated list of paths.
+
+  ```bash
+  scalf process.scl --allow-read=/tmp,/home/user/data
+  ```
+</ParamField>
+
+<ParamField query="--allow-write" type="string">
+  Grant the script write access to the specified file-system paths. Accepts a comma-separated list of paths.
+
+  ```bash
+  scalf process.scl --allow-write=/tmp/output
+  ```
+</ParamField>
+
+<ParamField query="--allow-net" type="string">
+  Grant the script network access to the specified domains. Accepts a comma-separated list of domain names.
+
+  ```bash
+  scalf client.scl --allow-net=api.example.com,cdn.example.com
+  ```
+</ParamField>
+
+<ParamField query="--allow-env" type="boolean">
+  Grant the script access to environment variables.
+
+  ```bash
+  scalf config.scl --allow-env
+  ```
+</ParamField>
+
+<ParamField query="--allow-all" type="boolean">
+  Grant all permissions at once — read, write, network, and environment. Equivalent to passing all individual `--allow-*` flags.
+
+  ```bash
+  scalf script.scl --allow-all
+  ```
+</ParamField>
+
+<ParamField query="--prompt-permissions" type="boolean">
+  Instead of denying permission requests outright, prompt the user interactively at runtime whenever the script tries to access a protected resource.
+
+  ```bash
+  scalf script.scl --prompt-permissions
+  ```
+</ParamField>
+
+<ParamField query="--vm" type="boolean">
+  Execute the script using the bytecode VM instead of the default tree-walking interpreter. The script is compiled to bytecode in memory before execution. Requires a script path — cannot be used to launch the REPL.
+
+  ```bash
+  scalf script.scl --vm
+  ```
+</ParamField>
+
+<ParamField query="--implicit-nil" type="boolean">
+  Treat reads of unknown (undeclared) variables as `nil` instead of raising a type or runtime error. Useful for loosely-structured scripts or migration scenarios.
+
+  ```bash
+  scalf legacy.scl --implicit-nil
+  ```
+</ParamField>
+
+## Shebang Support
+
+SCALF scripts support Unix shebang lines, so they can be executed directly by the shell after `chmod +x`. Permission flags are passed as arguments to `scalf` in the shebang header.
+
+```python
+#!/usr/bin/env scalf --allow-net=example.com
+response = http.get("https://example.com/api/data")
+print(response.text())
+```
+
+```python
+#!/usr/bin/env scalf --allow-read=/data --allow-write=/tmp
+use std.fs as fs
+content = fs.read("/data/input.txt")
+fs.write("/tmp/output.txt", content)
+```
+
+Make the script executable and run it directly:
+
+```bash
+chmod +x fetch.scl
+./fetch.scl
+```
+
+## The `scalf docs` Command
+
+The `docs` subcommand generates a Markdown stdlib reference from the doc comments embedded in SCALF's standard library source files.
+
+```bash
+# Write to the default location: docs/stdlib_reference.md
+scalf docs
+
+# Write to a custom path
+scalf docs --out=site/api.md
+```
+
+Output on success:
+
+```
+generated stdlib docs: docs/stdlib_reference.md (12 module files)
+```
+
+<ParamField query="--out" type="string">
+  Path to write the generated Markdown file. Defaults to `docs/stdlib_reference.md`.
+</ParamField>

@@ -1,0 +1,142 @@
+---
+title: "URL Imports: Remote Modules with Lockfile Integrity"
+sidebarTitle: "URL Imports"
+description: "Import remote SCALF modules directly from URLs. SCALF caches them content-addressed via SHA-256 and verifies integrity on subsequent runs using a lockfile."
+---
+
+SCALF can import modules directly from remote URLs, similar to how Deno resolves dependencies. The first time a URL import is encountered, SCALF fetches the source over the network, computes a SHA-256 digest, writes the content to a local cache, and records the hash in a lockfile. Every subsequent run reads from the cache and verifies the stored hash — the network is not touched again unless the cache is cold.
+
+## Import syntax
+
+```python
+use "https://example.com/lib.scalf@v1" as lib
+```
+
+The string must be a valid `http://` or `https://` URL. Anything else is treated as a local file path. The optional `@version` suffix (e.g. `@v1`, `@main`) is metadata for pinning — SCALF records it in the lockfile alongside the hash so you can tell at a glance which version a cached entry came from.
+
+**`url_import.scl`** — a minimal URL import:
+
+```python
+#!/usr/bin/env scalf --allow-net=example.com
+
+use "https://example.com/lib.scalf@v1" as lib
+
+print(lib.version)
+```
+
+<Tip>
+  Always include the `@version` suffix when importing from a URL. It makes the
+  lockfile human-readable and is the only way to distinguish two cached entries
+  that resolve to the same hostname and path.
+</Tip>
+
+## How caching works
+
+<Steps>
+  <Step title="First import: fetch and cache">
+    SCALF sends an HTTP GET request to the URL. On a successful response it:
+
+    1. Computes the SHA-256 digest of the raw source text.
+    2. Writes the source to the content-addressed cache at
+       `$HOME/.rask/cache/modules/<sha256>.rask`.
+    3. Creates (or updates) a lockfile called `.scl.lock` in the current working
+       directory, recording the URL and its digest.
+  </Step>
+  <Step title="Subsequent imports: verify from cache">
+    SCALF reads the cached entry for the URL from `.scl.lock`, re-hashes the
+    cached file, and compares against the stored digest. If the hashes match,
+    the cached source is used directly — no network request is made.
+  </Step>
+  <Step title="Tamper detection">
+    If the cached file has been modified (hash mismatch), SCALF aborts with an
+    integrity error rather than silently running potentially altered code.
+  </Step>
+</Steps>
+
+### Cache directory
+
+The default cache location is `$HOME/.rask/cache/modules/`. Override it by
+setting the `RASK_CACHE_DIR` environment variable:
+
+```bash
+RASK_CACHE_DIR=/opt/scalf-cache scalf --allow-net=example.com script.scl
+```
+
+### Lockfile
+
+The lockfile is written to `.scl.lock` in the current directory by default.
+Override the path with the `RASK_LOCKFILE` environment variable:
+
+```bash
+RASK_LOCKFILE=./locks/project.scl.lock scalf --allow-net=example.com script.scl
+```
+
+Commit `.scl.lock` to version control. It is the source of truth for
+reproducible builds — a fresh checkout with a warm-enough cache will always
+resolve the same module versions.
+
+## Local file imports
+
+Imports whose path does not begin with `http://` or `https://` are resolved as
+local file imports relative to the **source file** that contains the `use`
+statement:
+
+```python
+use "./utils.scl" as utils
+use "../shared/types.scl" as types
+```
+
+Local imports are never fetched, never cached, and never written to the
+lockfile. SCALF distinguishes URL imports from local imports purely by the
+scheme prefix: if the string starts with `http://` or `https://`, it is a URL
+import; otherwise it is a local path.
+
+## Namespace isolation
+
+Every URL-imported module has its own isolated namespace. Exports from
+`https://example.com/lib.scalf@v1` are only accessible via the `lib` alias —
+they do not leak into the global scope of the importing file or into other
+modules. This prevents naming collisions when two remote modules export
+identically named symbols.
+
+## Permission requirement
+
+URL imports require `--allow-net=<domain>` for the **initial fetch** only.
+Once the entry is in the cache and the lockfile is written, subsequent runs
+read entirely from disk and require no network permission.
+
+<Warning>
+  If you run a script on a machine without a warm cache (e.g. a fresh CI
+  container), the `--allow-net` flag is required for each domain referenced by
+  URL imports. Add those domains to your CI invocation or pre-populate the
+  cache before revoking network access.
+</Warning>
+
+## Local and remote imports together
+
+The `release_validation.scl` file demonstrates both import styles side by side:
+
+```python
+use std.fs as files
+use std.http as net
+use std.crypto as hash
+
+# Local import — resolved relative to this file, not cached
+use "examples/hello.scl" as local_hello
+
+# URL import — fetched once, cached by SHA-256, verified via .scl.lock
+use "https://raw.githubusercontent.com/MINTILER-DEV/rask/main/examples/hello.scl@main" as remote_hello
+```
+
+Later in the same file, the test suite asserts the lockfile was written:
+
+```python
+test "imports_and_std_module_aliases" {
+  assert local_hello.name == "scalf"
+  assert len(remote_hello.name) > 0
+  assert files.exists(".scl.lock")
+}
+```
+
+This pattern — mixing local utilities with pinned remote modules — is the
+recommended way to structure multi-file SCALF projects.

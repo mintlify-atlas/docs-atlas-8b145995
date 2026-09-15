@@ -1,0 +1,138 @@
+---
+title: "std.json: Parse and Stringify JSON in SCALF"
+sidebarTitle: "json"
+description: "Parse JSON strings into SCALF values and serialize SCALF values back to JSON with optional pretty-printing using std.json."
+---
+
+The `std.json` module lets you move data between JSON text and native SCALF values. Use `json.parse` to deserialize a JSON string into a map, list, string, number, bool, or `nil`; use `json.stringify` to serialize any SCALF value back to a compact or human-readable JSON string. This module is commonly paired with `std.fs` for reading and writing data files and with `std.http` for working with JSON API responses.
+
+```python
+use std.json as json
+```
+
+## Functions
+
+### `json.parse`
+
+Parses a JSON-formatted string and returns the corresponding SCALF value. The mapping follows standard JSON-to-language conventions: JSON objects become maps, arrays become lists, strings remain strings, numbers become SCALF numbers, `true`/`false` become booleans, and `null` becomes `nil`.
+
+<ParamField path="text" type="string" required>
+  A valid JSON string to parse.
+</ParamField>
+
+<ResponseField name="return" type="value">
+  The SCALF value represented by the JSON string — a map, list, string, number, bool, or `nil`.
+</ResponseField>
+
+```python
+use std.json as json
+
+data = json.parse("{\"name\": \"Alice\", \"age\": 30}")
+print(data.name)   # Alice
+print(data.age)    # 30
+```
+
+Use `or` to handle malformed input gracefully:
+
+```python
+data = json.parse(raw_input) or {}
+```
+
+---
+
+### `json.stringify`
+
+Serializes a SCALF value to a JSON string. Pass `true` as the second argument to enable pretty-printing with indentation, which is useful for writing human-readable files.
+
+<ParamField path="value" type="value" required>
+  The SCALF value to serialize. Supports maps, lists, strings, numbers, booleans, and `nil`.
+</ParamField>
+
+<ParamField path="pretty" type="bool">
+  Optional. When `true`, the output is indented for human readability. Defaults to compact single-line output.
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The JSON representation of the value.
+</ResponseField>
+
+Compact output (default):
+
+```python
+use std.json as json
+
+payload = json.stringify({ name: "Alice", active: true })
+# {"name":"Alice","active":true}
+```
+
+Pretty-printed output:
+
+```python
+use std.json as json
+
+payload = json.stringify({ name: "Alice", active: true }, true)
+# {
+#   "name": "Alice",
+#   "active": true
+# }
+```
+
+## Real-world example
+
+### Task list manager (`tasklist.scl`)
+
+This script reads a list of tasks from `tasks.json`, adds new entries, and writes the updated list back — using `json.parse` to deserialize and `json.stringify(tasks, true)` to produce a readable file on disk:
+
+```python
+#!/usr/bin/env scalf --allow-write=tasks.json --allow-read=tasks.json
+
+use std.fs
+use std.json
+
+def loadTasks() -> List<Map<string, string>> {
+  content = fs.read("tasks.json") or return []
+  return json.parse(content) or return []
+}
+
+def saveTasks(tasks: List<Map<string, string>>) {
+  content = json.stringify(tasks, true)
+  fs.write("tasks.json", content)
+}
+
+def addTask(tasks, description: string, priority: string) {
+  task = {
+    id: "{len(tasks) + 1}",
+    description: description,
+    priority: priority,
+    done: "false"
+  }
+  tasks.push(task)
+}
+
+def listTasks(tasks) {
+  print("\n📋 Tasks:")
+  for task in tasks {
+    status = match task.done {
+      "true" => "✓",
+      _ => "○"
+    }
+    emoji = match task.priority {
+      "high" => "🔴",
+      "medium" => "🟡",
+      _ => "🟢"
+    }
+    print("  {status} {emoji} {task.description}")
+  }
+}
+
+tasks = loadTasks()
+addTask(tasks, "Write documentation", "high")
+addTask(tasks, "Fix bug in parser", "medium")
+addTask(tasks, "Add more examples", "low")
+listTasks(tasks)
+saveTasks(tasks)
+```
+
+<Tip>
+  `json.stringify(value, true)` is the idiomatic way to write pretty-printed JSON to a file. The second argument controls indentation — omit it or pass `false` for the compact wire format.
+</Tip>

@@ -1,0 +1,121 @@
+---
+title: "std.time: Timestamps and Sleep in SCALF"
+sidebarTitle: "time"
+description: "Get current Unix timestamps in milliseconds or seconds, and pause script execution with std.time.sleep."
+---
+
+The `std.time` module gives scripts access to the system clock and lets them pause execution for a fixed duration. It is most useful for timestamping data, measuring elapsed time, and introducing deliberate delays in loops. No permissions are required.
+
+```python
+use std.time as time
+```
+
+## Functions
+
+### `time.now_ms`
+
+Returns the current Unix epoch time in **milliseconds** as an integer. Suitable when you need sub-second precision or want to measure elapsed time between two points.
+
+<ResponseField name="return" type="int">
+  The number of milliseconds that have elapsed since the Unix epoch (1970-01-01 00:00:00 UTC).
+</ResponseField>
+
+```python
+use std.time as time
+
+start = time.now_ms()
+# ... do some work ...
+elapsed = time.now_ms() - start
+print("Elapsed: {elapsed}ms")
+```
+
+---
+
+### `time.now_s`
+
+Returns the current Unix epoch time in **seconds** as an integer. Suitable for human-readable timestamps and file names.
+
+<ResponseField name="return" type="int">
+  The number of whole seconds that have elapsed since the Unix epoch.
+</ResponseField>
+
+```python
+use std.time as time
+
+timestamp = time.now_s()
+print("Current Unix timestamp: {timestamp}")
+```
+
+---
+
+### `time.sleep`
+
+Pauses execution of the current script for the given number of milliseconds, then resumes.
+
+<ParamField path="ms" type="int" required>
+  The number of milliseconds to sleep.
+</ParamField>
+
+<ResponseField name="return" type="nil">
+  Returns `nil` after waking.
+</ResponseField>
+
+```python
+use std.time as time
+
+print("Starting...")
+time.sleep(2000)   # pause for 2 seconds
+print("Done.")
+```
+
+## Real-world example
+
+### Backup script (`backup.scl`)
+
+The backup utility uses `time.now_s()` to generate a unique, human-sortable timestamp that is embedded in each backup file name:
+
+```python
+#!/usr/bin/env scalf --allow-read=. --allow-write=.
+
+use std.fs
+use std.time
+use std.crypto
+
+def backup_file(source_path: string, timestamp: int) {
+  if !fs.exists(source_path) {
+    print("⚠️  Skipping missing file: {source_path}")
+    return
+  }
+
+  content = fs.read(source_path) or return
+  digest = crypto.sha256(content)
+  safe_name = source_path.replace("/", "_").replace("\\", "_")
+  backup_path = "backup_{timestamp}_{safe_name}.bak"
+
+  fs.write(backup_path, content)
+  print("✓ {source_path} -> {backup_path} ({digest})")
+}
+
+def create_backup() {
+  timestamp = time.now_s()
+  print("📦 Starting backup job: {timestamp}")
+
+  files = [
+    "README.md",
+    "docs/language_spec.md",
+    "plans/plan.md"
+  ]
+
+  for file in files {
+    backup_file(file, timestamp)
+  }
+
+  print("✅ Backup job finished")
+}
+
+create_backup()
+```
+
+<Tip>
+  Use `time.now_s()` in file names when you want chronological sort order for free (Unix seconds are monotonically increasing). Use `time.now_ms()` when you need finer granularity — for example, when multiple files might be written within the same second.
+</Tip>

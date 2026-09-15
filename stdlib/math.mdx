@@ -1,0 +1,147 @@
+---
+title: "std.math: Mathematical Constants and Functions"
+sidebarTitle: "math"
+description: "Access math constants like pi and e, and functions like min, max, abs, and round using SCALF's built-in std.math module."
+---
+
+The `std.math` module exposes the mathematical constants and utility functions you reach for most often in numeric scripting. It requires no permissions and has no side effects — import it freely in any script.
+
+```python
+use std.math as math
+```
+
+## Constants
+
+### `math.pi`
+
+The mathematical constant π (pi), approximately `3.141592653589793`.
+
+```python
+use std.math as math
+
+circumference = 2 * math.pi * radius
+```
+
+---
+
+### `math.e`
+
+Euler's number, the base of the natural logarithm, approximately `2.718281828459045`.
+
+```python
+use std.math as math
+
+print(math.e)   # 2.718281828459045
+```
+
+## Functions
+
+### `math.min`
+
+Returns the smaller of two numbers.
+
+<ParamField path="a" type="number" required>
+  The first number.
+</ParamField>
+
+<ParamField path="b" type="number" required>
+  The second number.
+</ParamField>
+
+<ResponseField name="return" type="number">
+  Whichever of `a` or `b` is smaller.
+</ResponseField>
+
+```python
+use std.math as math
+
+smaller = math.min(10, 3)
+print(smaller)   # 3
+```
+
+---
+
+### `math.max`
+
+Returns the larger of two numbers.
+
+<ParamField path="a" type="number" required>
+  The first number.
+</ParamField>
+
+<ParamField path="b" type="number" required>
+  The second number.
+</ParamField>
+
+<ResponseField name="return" type="number">
+  Whichever of `a` or `b` is larger.
+</ResponseField>
+
+```python
+use std.math as math
+
+larger = math.max(10, 3)
+print(larger)   # 10
+```
+
+---
+
+### `math.abs`
+
+Returns the absolute value of a number.
+
+<ParamField path="x" type="number" required>
+  The input number.
+</ParamField>
+
+<ResponseField name="return" type="number">
+  The non-negative magnitude of `x`.
+</ResponseField>
+
+```python
+use std.math as math
+
+print(math.abs(-42))    # 42
+print(math.abs(7))      # 7
+```
+
+---
+
+### `math.round`
+
+Rounds a number to the nearest integer using standard half-up rounding.
+
+<ParamField path="x" type="number" required>
+  The number to round.
+</ParamField>
+
+<ResponseField name="return" type="number">
+  The value of `x` rounded to the nearest whole number.
+</ResponseField>
+
+```python
+use std.math as math
+
+print(math.round(4.3))    # 4
+print(math.round(4.7))    # 5
+print(math.round(-2.5))   # -2
+```
+
+## Example: combining constants and functions
+
+```python
+use std.math as math
+
+def circle_area(radius: number) {
+  return math.round(math.pi * radius * radius)
+}
+
+def clamp(value: number, lo: number, hi: number) {
+  return math.min(math.max(value, lo), hi)
+}
+
+print(circle_area(5))       # 79
+print(clamp(-10, 0, 100))   # 0
+print(clamp(150, 0, 100))   # 100
+print(clamp(42, 0, 100))    # 42
+```

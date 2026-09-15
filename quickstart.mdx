@@ -1,47 +1,177 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with SCALF in 5 Minutes"
+sidebarTitle: "Quickstart"
+description: "Write and run your first SCALF script, use the type checker and formatter, and make an HTTP request — all in under five minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+This guide walks you through the core SCALF workflow: writing and running a script, adding type annotations, formatting your code, running the type checker, making an authenticated HTTP request, and writing your first test. By the end you will have touched every major part of the toolchain and be ready to explore the language in depth. Make sure you have already [installed SCALF](/installation) before continuing.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Write and run Hello World">
+    Create a file called `hello.scl` with the following content:
+
+    ```python
+    #!/usr/bin/env scalf
+    name = "world"
+    print("Hello, {name}!")
+    ```
+
+    Run it with:
 
     ```bash
-    npm install your-package
+    scalf hello.scl
     ```
+
+    You should see:
+
+    ```
+    Hello, world!
+    ```
+
+    The `{name}` syntax is SCALF's string interpolation — any variable in curly braces is evaluated and embedded in the string at runtime. The shebang line (`#!/usr/bin/env scalf`) is optional but makes the script directly executable on Unix systems.
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+
+  <Step title="Add type annotations">
+    SCALF's type checker runs automatically on every execution, but you get the most benefit by annotating your functions. Update `hello.scl` to wrap the greeting in a typed function:
+
+    ```python
+    def greet(name: string) -> string {
+      return "Hello, {name}!"
+    }
+
+    message = greet("world")
+    print(message)
+    ```
+
+    Run it again:
 
     ```bash
-    your-cli init
+    scalf hello.scl
     ```
+
+    The type checker validates that `greet` receives a `string` and that its return value is also a `string`. If you pass the wrong type — for example an integer — the type checker reports an error before the script runs. There is no separate compile step; type checking happens inline every time you execute a `.scl` file.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+
+  <Step title="Format your code">
+    SCALF ships a built-in formatter. To format `hello.scl` in-place:
 
     ```bash
-    your-cli start
+    scalf fmt hello.scl
     ```
+
+    The file is rewritten to canonical style and the CLI prints:
+
+    ```
+    formatted hello.scl
+    ```
+
+    To check formatting in CI without modifying files, use the `--check` flag:
+
+    ```bash
+    scalf fmt --check hello.scl
+    ```
+
+    If the file is already formatted correctly you will see:
+
+    ```
+    fmt check passed: hello.scl
+    ```
+
+    If it differs, the command exits with a non-zero status and prints a message telling you to run `scalf fmt hello.scl`.
+  </Step>
+
+  <Step title="Run the type checker and linter">
+    To run only the type checker and linter without executing the script, use:
+
+    ```bash
+    scalf check hello.scl
+    ```
+
+    On a clean file you will see:
+
+    ```
+    check passed: hello.scl
+    ```
+
+    If there are lint warnings (unused variables, unreachable code, and similar), they are printed with their location, code, and a hint. The exit code is still zero for warnings, but non-zero for type errors. This command is ideal for editor integrations and pre-commit hooks.
+  </Step>
+
+  <Step title="Make an HTTP request">
+    SCALF's permission sandbox denies network access by default. To make HTTP calls you must grant permission explicitly. Create `http_client.scl`:
+
+    ```python
+    #!/usr/bin/env scalf --allow-net=www.google.com
+    use std.http
+
+    response = http.get("https://www.google.com/")
+    print(response.status)
+    ```
+
+    Run it with the `--allow-net` flag:
+
+    ```bash
+    scalf --allow-net=www.google.com http_client.scl
+    ```
+
+    You should see the HTTP status code printed to stdout (for example, `200`). The `--allow-net=` flag accepts a comma-separated list of hostnames. Requests to any host not on the list are blocked at runtime with a permission error.
+
+    The response object exposes `.status`, `.url`, `.headers`, `.text()`, and `.json()`. HTTP calls start immediately and resolve lazily, so multiple independent requests can overlap without blocking each other.
+
+    <Note>
+      You can also embed the permission grant in the shebang line, as shown in the example above. When the script is run directly (`./http_client.scl`), the kernel passes the shebang arguments to `scalf` automatically.
+    </Note>
+  </Step>
+
+  <Step title="Write and run tests">
+    SCALF has a built-in `test` block and `assert` statement. Add a test to a new file `math_utils.scl`:
+
+    ```python
+    def add(a: int, b: int) -> int {
+      return a + b
+    }
+
+    test "add returns the correct sum" {
+      assert add(2, 3) == 5
+      assert add(0, 0) == 0
+      assert add(-1, 1) == 0
+    }
+
+    test "add handles negative numbers" {
+      assert add(-5, -3) == -8
+    }
+    ```
+
+    Run the tests with:
+
+    ```bash
+    scalf test math_utils.scl
+    ```
+
+    Passing tests print:
+
+    ```
+    PASS add returns the correct sum
+    PASS add handles negative numbers
+    test result: ok. 2 passed; 0 failed
+    ```
+
+    If an assertion fails, the test prints `FAIL` along with the error message and the command exits non-zero, making it straightforward to use in CI pipelines.
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## What's Next
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Language Reference" icon="book" href="/language/syntax">
+    Dive into the full SCALF syntax: types, expressions, control flow, functions, match, destructuring, and more.
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Every `scalf` subcommand explained: `fmt`, `check`, `test`, `build`, `cache`, `startup`, `docs`, and all CLI flags.
+  </Card>
+  <Card title="Standard Library" icon="layer-group" href="/stdlib/overview">
+    Explore the built-in modules: `std.fs`, `std.http`, `std.json`, `std.math`, `std.path`, `std.env`, `std.time`, and `std.crypto`.
+  </Card>
+  <Card title="Permissions Guide" icon="shield-halved" href="/guides/permissions">
+    Learn how SCALF's permission sandbox works, how to grant the minimum required permissions, and how to use `--prompt-permissions` for interactive scripts.
+  </Card>
+</CardGroup>

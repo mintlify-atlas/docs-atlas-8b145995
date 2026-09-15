@@ -1,0 +1,275 @@
+---
+title: "Defining and Using Functions in SCALF"
+sidebarTitle: "Functions"
+description: "SCALF functions are defined with def, support typed parameters and return types, closures, anonymous functions, and object-style method dispatch."
+---
+
+Functions are the primary unit of abstraction in SCALF. They are defined with the `def` keyword, carry optional type annotations on their parameters and return value, and are first-class values — you can assign them to variables, pass them as arguments, and return them from other functions. This page covers every aspect of SCALF functions, from simple definitions to closures and object-style method dispatch.
+
+## Basic Function Definitions
+
+Use `def` followed by the function name, a parenthesised parameter list, an optional return-type annotation, and a brace-delimited body:
+
+```python
+def square(x: int) -> int {
+  return x * x
+}
+
+def is_even(x: int) -> bool {
+  return x % 2 == 0
+}
+
+def add_ints(acc: int, x: int) -> int {
+  return acc + x
+}
+```
+
+Parameters without a type annotation are accepted — the typechecker infers their type from how they are used:
+
+```python
+def addTask(tasks, description: string, priority: string) {
+  task = {
+    id:          "{len(tasks) + 1}",
+    description: description,
+    priority:    priority,
+    done:        "false"
+  }
+  tasks.push(task)
+}
+```
+
+## `return` — With and Without a Value
+
+`return` exits a function. An optional expression provides the return value. Omitting it returns `nil`:
+
+```python
+def greet(name: string) -> string {
+  return "Hello, {name}!"
+}
+
+def maybe_value(v) {
+  value = v or return        # returns nil when v is nil
+  return value
+}
+```
+
+`return` can also be used as the right-hand side of an `or` coalescing expression to create nil-guards:
+
+```python
+def backup_file(source_path: string, timestamp: int) {
+  if !fs.exists(source_path) {
+    print("⚠️  Skipping missing file: {source_path}")
+    return
+  }
+  content = fs.read(source_path) or return   # early return on read failure
+  # ...
+}
+```
+
+## Anonymous Functions
+
+An anonymous function expression is a `def` without a name. It can be assigned to a variable, passed directly as an argument, or returned from another function:
+
+```python
+# Assign to a variable
+adder = def(x: int, y: int) -> int {
+  return x + y
+}
+
+assert adder(20, 22) == 42
+```
+
+Anonymous functions support the full type-annotation syntax for parameters and return types.
+
+## First-Class Functions
+
+Functions are values. You can store them in variables, pass them to higher-order functions, and keep them in maps:
+
+```python
+def square(x: int) -> int {
+  return x * x
+}
+
+# Pass a named function as an argument
+mapped   = [1, 2, 3].map(square)        # [1, 4, 9]
+filtered = mapped.filter(is_even)       # [4]
+reduced  = mapped.reduce(add_ints, 0)   # 14
+```
+
+Holding a function in a map field for dispatch:
+
+```python
+override = {
+  get: def(key: string) -> string {
+    return "custom:" + key
+  }
+}
+
+assert override.get("x") == "custom:x"
+```
+
+## Closures and Captured State
+
+Anonymous functions close over variables in the surrounding scope. This makes it possible to carry state inside a returned map:
+
+```python
+def make_counter(start: int) {
+  return {
+    value: start,
+    inc: def() -> int {
+      this.value = this.value + 1
+      return this.value
+    }
+  }
+}
+
+counter = make_counter(0)
+assert counter.inc() == 1
+assert counter.inc() == 1     # NOTE: counter state is per-object
+assert counter.value == 0
+```
+
+<Note>
+The `this` keyword inside a method refers to the map that owns the function. Assigning `this.field = …` mutates the map in place, enabling stateful objects without a class system.
+</Note>
+
+## Object-Style Method Dispatch
+
+SCALF does not have a `class` keyword. Instead, objects are plain maps that carry function values as fields. Calling `obj.method(args)` dispatches through the map and sets `this` to `obj` inside the function body.
+
+```python
+def make_counter(start: int) {
+  return {
+    value: start,
+    inc: def() -> int {
+      this.value = this.value + 1
+      return this.value
+    }
+  }
+}
+```
+
+You can also attach methods after construction:
+
+```python
+obj = {name: "a"}
+obj.name  = "b"       # update existing field
+obj.count = 3         # add new field
+assert obj["name"] == "b"
+assert obj.count     == 3
+```
+
+## Recursion
+
+Functions can call themselves by name. The typechecker validates recursive calls just like any other call:
+
+```python
+def factorial(n: int) -> int {
+  if n <= 1 {
+    return 1
+  }
+  return n * factorial(n - 1)
+}
+
+assert factorial(5) == 120
+```
+
+## `test` Blocks
+
+A `test` block is a named, self-contained test suite. It uses `assert` statements to verify behaviour and is run with `scalf test`:
+
+```python
+test "core arithmetic" {
+  assert square(4)   == 16
+  assert is_even(4)  == true
+  assert is_even(3)  == false
+  assert add_ints(10, 5) == 15
+}
+```
+
+Tests from `release_validation.scl` that validate functions and closures:
+
+```python
+test "functions_inline_methods_and_member_assignment" {
+  adder = def(x: int, y: int) -> int {
+    return x + y
+  }
+  assert adder(20, 22) == 42
+
+  counter = make_counter(0)
+  assert counter.inc() == 1
+  assert counter.inc() == 1
+  assert counter.value == 0
+
+  obj = {name: "a"}
+  obj.name  = "b"
+  obj.count = 3
+  assert obj["name"] == "b"
+  assert obj.count     == 3
+
+  override = {
+    get: def(key: string) -> string {
+      return "custom:" + key
+    }
+  }
+  assert override.get("x") == "custom:x"
+}
+```
+
+Run all tests in a file with:
+
+```bash
+scalf test myprogram.scl --allow-all
+```
+
+## Complete Example: Task List
+
+The following is a condensed version of `tasklist.scl` that shows typed function definitions, anonymous function use, and first-class function passing in a real program:
+
+```python
+use std.fs
+use std.json
+
+def loadTasks() -> List<Map<string, string>> {
+  content = fs.read("tasks.json") or return []
+  return json.parse(content) or return []
+}
+
+def saveTasks(tasks: List<Map<string, string>>) {
+  content = json.stringify(tasks, true)
+  fs.write("tasks.json", content)
+}
+
+def addTask(tasks, description: string, priority: string) {
+  task = {
+    id:          "{len(tasks) + 1}",
+    description: description,
+    priority:    priority,
+    done:        "false"
+  }
+  tasks.push(task)
+}
+
+def listTasks(tasks) {
+  print("\n📋 Tasks:")
+  for task in tasks {
+    status = match task.done {
+      "true" => "✓"
+      _      => "○"
+    }
+    emoji = match task.priority {
+      "high"   => "🔴"
+      "medium" => "🟡"
+      _        => "🟢"
+    }
+    print("  {status} {emoji} {task.description}")
+  }
+}
+
+tasks = loadTasks()
+addTask(tasks, "Write documentation", "high")
+addTask(tasks, "Fix bug in parser",   "medium")
+addTask(tasks, "Add more examples",   "low")
+listTasks(tasks)
+saveTasks(tasks)
+```

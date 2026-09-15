@@ -1,0 +1,166 @@
+---
+title: "SCALF REPL: Interactive Scripting Shell"
+sidebarTitle: "REPL"
+description: "Start the SCALF interactive REPL with no arguments. Features syntax highlighting, tab completion, persistent history, inline docs, and multi-line input."
+---
+
+Invoking `scalf` with no arguments drops you into the interactive REPL — a read-eval-print loop that gives you a live SCALF environment for exploration, prototyping, and debugging. The REPL shares the same type-checker and runtime as the full CLI, so behaviour is identical to running a script file.
+
+## Launching the REPL
+
+```bash
+# Start with no permissions (default sandbox)
+scalf
+
+# Start with specific permissions
+scalf --allow-net=api.example.com
+
+# Start with all permissions
+scalf --allow-all
+
+# Start with env access and file read permission
+scalf --allow-env --allow-read=/data
+```
+
+Permission flags passed at launch apply to everything evaluated in the session. The same flags accepted by `scalf run` are supported here.
+
+## REPL Banner
+
+When started interactively, SCALF prints a short welcome message:
+
+```
+Scalf REPL
+Commands: :help, :doc <symbol>, :complete <prefix>, :history, :timing on|off, :quit
+Multi-line mode is automatic when input is syntactically incomplete.
+```
+
+## Features
+
+### Multi-line Input
+
+The REPL detects when an expression or block is syntactically incomplete and automatically continues to the next line rather than attempting evaluation. The prompt changes from `scalf>` to `....>` to indicate continuation mode.
+
+```
+scalf> def greet(name: string) -> string {
+....>   return "hello, " + name
+....> }
+scalf> greet("world")
+"hello, world"
+time: 0.041 ms
+```
+
+You do not need any special commands to enter or exit multi-line mode — it is fully automatic.
+
+### Syntax Highlighting
+
+Input lines are colourised in real time as you type, using ANSI terminal colours. Keywords, string literals, numbers, and operators each receive distinct colours. You can also preview highlighting for any snippet using the `:highlight` command.
+
+### Tab Completion
+
+As you type an identifier, pressing Tab completes it against the list of symbols currently in scope (variables and functions you have defined in the session). You can also trigger completion explicitly:
+
+```
+scalf> :complete gre
+greet
+```
+
+### Evaluation Timing
+
+After each successful evaluation, the REPL prints the elapsed time in milliseconds. Timing is on by default and can be toggled with `:timing`.
+
+```
+scalf> 1 + 1
+2
+time: 0.012 ms
+```
+
+### Persistent History
+
+The REPL saves up to 500 history entries to disk between sessions. The history file is located at:
+
+- **Unix / macOS:** `~/.scl/repl_history` (falls back to `.scl_repl_history` in the working directory if `$HOME` is not set)
+- **Windows:** `%USERPROFILE%\.scl\repl_history`
+
+You can override the path by setting the `scalf_REPL_HISTORY` environment variable:
+
+```bash
+scalf_REPL_HISTORY=/tmp/my_history scalf
+```
+
+### Inline Docs
+
+The `:doc` command prints a quick reference for any built-in module or symbol:
+
+```
+scalf> :doc http
+std.http: get/post/put/delete(url, body?, headers?, timeout_ms?)
+
+scalf> :doc json
+std.json: parse(string), stringify(value, pretty?)
+
+scalf> :doc math
+std.math: pi, e, min, max, abs, round
+```
+
+## REPL Commands
+
+All meta-commands begin with `:`. They are processed before the input is evaluated as SCALF code.
+
+| Command | Description |
+|---------|-------------|
+| `:help` | Print the command reference |
+| `:doc <symbol>` | Show inline docs for a built-in symbol or module |
+| `:complete <prefix>` | List completion suggestions for a prefix |
+| `:history [n]` | Print the last `n` history entries (default 20) |
+| `:timing on\|off` | Toggle per-evaluation timing output |
+| `:highlight <code>` | Preview ANSI syntax highlighting for a code snippet |
+| `:quit` or `:exit` | Exit the REPL |
+
+You can also type `quit` or `exit` (without the colon) to leave.
+
+## Exiting
+
+Press **Ctrl+D** (EOF) or **Ctrl+C** (interrupt) to exit, or type `:quit`.
+
+## Example Session
+
+```
+scalf> name = "scalf"
+time: 0.031 ms
+scalf> name
+"scalf"
+time: 0.008 ms
+scalf> def double(x: int) -> int {
+....>   return x * 2
+....> }
+time: 0.019 ms
+scalf> double(21)
+42
+time: 0.011 ms
+scalf> use std.math as m
+time: 0.024 ms
+scalf> m.round(m.pi)
+3
+time: 0.013 ms
+scalf> :doc fs
+std.fs: read(path), write(path, content), exists(path), delete(path)
+scalf> :timing off
+timing: off
+scalf> 1 + 1
+2
+scalf> :quit
+```
+
+<Tip>
+  Use the REPL as a quick type checker: define a function, call it with edge-case inputs, and inspect results interactively before writing a full test block.
+</Tip>
+
+## Non-interactive (Pipe) Mode
+
+When standard input is not a terminal (e.g. piped from a file or another command), the REPL operates without readline editing or history saving, making it suitable for scripted input:
+
+```bash
+echo 'print(1 + 1)' | scalf
+```
+
+The same prompts (`scalf>`, `....>`) are printed to stdout but the session ends cleanly when stdin reaches EOF.

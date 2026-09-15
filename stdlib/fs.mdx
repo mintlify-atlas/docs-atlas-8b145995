@@ -1,0 +1,191 @@
+---
+title: "std.fs: File System Operations in SCALF"
+sidebarTitle: "fs"
+description: "Read, write, check existence, and delete files with std.fs. Requires --allow-read and --allow-write permission flags."
+---
+
+The `std.fs` module provides the core file system operations you need in everyday scripting: reading file contents into a string, writing a string to disk, checking whether a path exists, and deleting files. All operations are synchronous and work relative to the process working directory unless an absolute path is given.
+
+```python
+use std.fs as fs
+```
+
+<Warning>
+  File system operations require explicit permission flags. Scripts that call `fs.read` without `--allow-read` (or `fs.write` without `--allow-write`) will fail at runtime with a permission error. Pass the narrowest path scope your script needs.
+</Warning>
+
+## Permissions
+
+| Operation | Required flag | Scoped example |
+|---|---|---|
+| `fs.read` | `--allow-read` | `--allow-read=./data` |
+| `fs.write` | `--allow-write` | `--allow-write=output.txt` |
+| `fs.exists` | `--allow-read` | `--allow-read=.` |
+| `fs.delete` | `--allow-write` | `--allow-write=.` |
+
+Grant read-and-write access to the current directory:
+
+```bash
+scalf --allow-read=. --allow-write=. my_script.scl
+```
+
+## Functions
+
+### `fs.read`
+
+Reads the entire contents of a file and returns them as a string.
+
+<ParamField path="path" type="string" required>
+  The path to the file to read. Relative paths are resolved from the working directory.
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The full text content of the file.
+</ResponseField>
+
+```python
+use std.fs as fs
+
+content = fs.read("README.md")
+print(content)
+```
+
+<Tip>
+  Use the `or` operator to handle missing files gracefully without a crash:
+
+  ```python
+  content = fs.read("config.json") or "default config"
+  ```
+</Tip>
+
+---
+
+### `fs.write`
+
+Writes a string to a file, creating the file if it does not exist or overwriting it if it does.
+
+<ParamField path="path" type="string" required>
+  The destination file path.
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  The string content to write.
+</ParamField>
+
+<ResponseField name="return" type="nil">
+  Returns `nil` on success.
+</ResponseField>
+
+```python
+use std.fs as fs
+
+fs.write("output.txt", "Hello from SCALF!\n")
+```
+
+---
+
+### `fs.exists`
+
+Returns `true` if the given path exists on the file system, `false` otherwise. Does not distinguish between files and directories.
+
+<ParamField path="path" type="string" required>
+  The path to check.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  `true` if the path exists, `false` if it does not.
+</ResponseField>
+
+```python
+use std.fs as fs
+
+if fs.exists("config.json") {
+  content = fs.read("config.json")
+  print("Config loaded")
+} else {
+  print("No config found, using defaults")
+}
+```
+
+---
+
+### `fs.delete`
+
+Deletes the file at the given path.
+
+<ParamField path="path" type="string" required>
+  The path of the file to delete.
+</ParamField>
+
+<ResponseField name="return" type="nil">
+  Returns `nil` on success.
+</ResponseField>
+
+```python
+use std.fs as fs
+
+if fs.exists("temp.txt") {
+  fs.delete("temp.txt")
+  print("Cleaned up temp.txt")
+}
+```
+
+## Real-world examples
+
+### File processor (`file_processor.scl`)
+
+A simple script that reads an input file and prints its contents:
+
+```python
+#!/usr/bin/env scalf --allow-read=. --allow-write=output.txt
+use std.fs
+
+content = fs.read("input.txt")
+print(content)
+```
+
+### Backup script (`backup.scl`)
+
+A backup utility that reads source files, hashes them, and writes timestamped copies. Note how `fs.exists` guards against missing files before the read, and `or return` short-circuits gracefully:
+
+```python
+#!/usr/bin/env scalf --allow-read=. --allow-write=.
+
+use std.fs
+use std.time
+use std.crypto
+
+def backup_file(source_path: string, timestamp: int) {
+  if !fs.exists(source_path) {
+    print("⚠️  Skipping missing file: {source_path}")
+    return
+  }
+
+  content = fs.read(source_path) or return
+  digest = crypto.sha256(content)
+  safe_name = source_path.replace("/", "_").replace("\\", "_")
+  backup_path = "backup_{timestamp}_{safe_name}.bak"
+
+  fs.write(backup_path, content)
+  print("✓ {source_path} -> {backup_path} ({digest})")
+}
+
+def create_backup() {
+  timestamp = time.now_s()
+  print("📦 Starting backup job: {timestamp}")
+
+  files = [
+    "README.md",
+    "docs/language_spec.md",
+    "plans/plan.md"
+  ]
+
+  for file in files {
+    backup_file(file, timestamp)
+  }
+
+  print("✅ Backup job finished")
+}
+
+create_backup()
+```

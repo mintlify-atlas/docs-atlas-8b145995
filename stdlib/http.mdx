@@ -1,0 +1,278 @@
+---
+title: "std.http: HTTP Client for SCALF Scripts"
+sidebarTitle: "http"
+description: "Make HTTP GET, POST, PUT, and DELETE requests from SCALF. Requests start immediately and resolve lazily — enabling concurrent HTTP without explicit async."
+---
+
+The `std.http` module is SCALF's built-in HTTP client. It covers the four most common request methods — GET, POST, PUT, and DELETE — and returns a lightweight response object with access to the status code, response headers, and body (as text or parsed JSON). No third-party libraries are required.
+
+```python
+use std.http as http
+```
+
+<Warning>
+  HTTP requests require the `--allow-net` permission flag. Without it, any call to `http.get`, `http.post`, `http.put`, or `http.delete` will fail at runtime. Scope the permission to the domain(s) your script actually contacts:
+
+  ```bash
+  scalf --allow-net=api.example.com my_script.scl
+  ```
+</Warning>
+
+## Lazy concurrency
+
+One of SCALF's key design choices is that HTTP requests **start immediately** when the function is called, but the response **resolves lazily** — the runtime only blocks when you first access `.status`, `.text()`, or `.json()` on the response object. This means you can fire multiple requests in quick succession and collect their results together, achieving concurrency without any explicit `async`/`await` syntax in your script.
+
+```python
+use std.http as http
+use std.concurrency as concurrency
+
+# All three requests are dispatched immediately
+r1 = http.get("https://api.example.com/users")
+r2 = http.get("https://api.example.com/posts")
+r3 = http.get("https://api.example.com/comments")
+
+# Resolves all three concurrently; blocks until every one is done
+results = concurrency.join([r1, r2, r3])
+```
+
+See [`std.concurrency`](/stdlib/concurrency) for `join`, `timeout`, and channel primitives that pair naturally with HTTP requests.
+
+## Functions
+
+### `http.get`
+
+Sends an HTTP GET request to the given URL.
+
+<ParamField path="url" type="string" required>
+  The full URL to request, including scheme (e.g. `https://`).
+</ParamField>
+
+<ParamField path="headers" type="Map<string, string>">
+  Optional map of request headers to include.
+</ParamField>
+
+<ParamField path="timeout_ms" type="int">
+  Optional timeout in milliseconds. The request is aborted if it does not complete within this window.
+</ParamField>
+
+<ResponseField name="return" type="Response">
+  A response object. See [Response object](#response-object) below.
+</ResponseField>
+
+```python
+use std.http as http
+
+response = http.get("https://www.google.com/")
+print(response.status)
+```
+
+With a custom timeout:
+
+```python
+response = http.get("https://api.example.com/data", 3000)
+```
+
+---
+
+### `http.post`
+
+Sends an HTTP POST request with a body.
+
+<ParamField path="url" type="string" required>
+  The full URL to post to.
+</ParamField>
+
+<ParamField path="body" type="string" required>
+  The request body as a string. For JSON APIs, serialize with `json.stringify` first.
+</ParamField>
+
+<ParamField path="headers" type="Map<string, string>">
+  Optional map of request headers (e.g. `Content-Type`).
+</ParamField>
+
+<ParamField path="timeout_ms" type="int">
+  Optional timeout in milliseconds.
+</ParamField>
+
+<ResponseField name="return" type="Response">
+  A response object.
+</ResponseField>
+
+```python
+use std.http as http
+use std.json as json
+
+payload = json.stringify({ name: "Alice", role: "admin" })
+response = http.post(
+  "https://api.example.com/users",
+  payload,
+  { "Content-Type": "application/json" }
+)
+print(response.status)
+```
+
+---
+
+### `http.put`
+
+Sends an HTTP PUT request with a body.
+
+<ParamField path="url" type="string" required>
+  The full URL to put to.
+</ParamField>
+
+<ParamField path="body" type="string" required>
+  The request body as a string.
+</ParamField>
+
+<ParamField path="headers" type="Map<string, string>">
+  Optional map of request headers.
+</ParamField>
+
+<ParamField path="timeout_ms" type="int">
+  Optional timeout in milliseconds.
+</ParamField>
+
+<ResponseField name="return" type="Response">
+  A response object.
+</ResponseField>
+
+```python
+use std.http as http
+use std.json as json
+
+payload = json.stringify({ role: "superadmin" })
+response = http.put(
+  "https://api.example.com/users/42",
+  payload,
+  { "Content-Type": "application/json" }
+)
+print(response.status)
+```
+
+---
+
+### `http.delete`
+
+Sends an HTTP DELETE request.
+
+<ParamField path="url" type="string" required>
+  The full URL to send the DELETE request to.
+</ParamField>
+
+<ParamField path="headers" type="Map<string, string>">
+  Optional map of request headers.
+</ParamField>
+
+<ParamField path="timeout_ms" type="int">
+  Optional timeout in milliseconds.
+</ParamField>
+
+<ResponseField name="return" type="Response">
+  A response object.
+</ResponseField>
+
+```python
+use std.http as http
+
+response = http.delete("https://api.example.com/users/42")
+print(response.status)
+```
+
+## Response object
+
+Every HTTP function returns a response object with the following fields and methods.
+
+<ResponseField name="status" type="int">
+  The HTTP status code (e.g. `200`, `404`, `500`).
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The final URL of the response, after any redirects.
+</ResponseField>
+
+<ResponseField name="headers" type="Map<string, string>">
+  A map of the response headers returned by the server.
+</ResponseField>
+
+<ResponseField name="text()" type="string">
+  Returns the response body as a raw string. Accessing this field blocks until the response has resolved.
+</ResponseField>
+
+<ResponseField name="json()" type="value">
+  Parses the response body as JSON and returns the resulting SCALF value. Equivalent to calling `json.parse(response.text())`. Accessing this field blocks until the response has resolved.
+</ResponseField>
+
+```python
+use std.http as http
+
+response = http.get("https://api.example.com/status")
+
+print(response.status)            # e.g. 200
+print(response.url)               # final URL after redirects
+print(response.headers)           # map of header name -> value
+
+body = response.text()            # raw string body
+data = response.json()            # parsed SCALF value
+```
+
+## Real-world examples
+
+### Simple GET (`http_client.scl`)
+
+```python
+#!/usr/bin/env scalf --allow-net=www.google.com
+use std.http
+
+response = http.get("https://www.google.com/")
+print(response.status)
+```
+
+### Concurrent weather dashboard (`weather.scl`)
+
+This example fetches weather data for four cities simultaneously using the lazy concurrency model and `concurrency.join`:
+
+```python
+#!/usr/bin/env scalf --allow-net=api.openweathermap.org,wttr.in
+
+use std.http
+use std.json
+use std.concurrency
+
+cities = ["London", "Tokyo", "New York", "Sydney"]
+
+def fetchWeather(city: string) {
+  url = "https://wttr.in/{city}?format=j1"
+  response = http.get(url, 5000) or return nil
+
+  data = response.json() or return nil
+  current = data.current_condition[0] or return nil
+
+  return {
+    city: city,
+    temp: current.temp_C,
+    condition: current.weatherDesc[0].value,
+    humidity: current.humidity
+  }
+}
+
+print("🌤️  Weather Dashboard")
+print("==================================================")
+
+# All four requests are dispatched immediately
+requests = [fetchWeather(city) for city in cities]
+
+# Blocks until all four have resolved
+results = concurrency.join(requests)
+
+for weather in results {
+  if weather == nil {
+    print("❌ Failed to fetch data")
+  } else {
+    print("\n📍 {weather.city}")
+    print("   Temperature: {weather.temp}°C")
+    print("   Condition: {weather.condition}")
+    print("   Humidity: {weather.humidity}%")
+  }
+}
+```

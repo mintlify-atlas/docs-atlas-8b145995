@@ -1,0 +1,93 @@
+---
+title: "SCALF Standard Library: Built-in Modules"
+sidebarTitle: "Overview"
+description: "SCALF ships with built-in modules for filesystem, HTTP, JSON, math, paths, environment, time, crypto, and concurrency — imported with use std.module."
+---
+
+The SCALF standard library is built directly into the runtime — there is nothing to install, no package manager to invoke, and no external dependencies to pin. Every module listed here is available in any SCALF script out of the box. Simply declare the modules you need at the top of your file and start using them.
+
+## Importing modules
+
+Use the `use` keyword followed by the fully-qualified module name. An `as` alias keeps call-sites concise:
+
+```python
+use std.fs as fs
+use std.http as http
+use std.json as json
+use std.math as math
+use std.path as path
+use std.env as env
+use std.time as time
+use std.crypto as crypto
+use std.concurrency as concurrency
+```
+
+You can also import without an alias, in which case the module is accessible by its short name (`fs`, `http`, etc.):
+
+```python
+use std.fs
+use std.json
+
+content = fs.read("data.json")
+parsed  = json.parse(content)
+```
+
+## Available modules
+
+<CardGroup cols={2}>
+  <Card title="fs" icon="folder-open" href="/stdlib/fs">
+    Read, write, check, and delete files on the local filesystem.
+  </Card>
+  <Card title="http" icon="globe" href="/stdlib/http">
+    Make GET, POST, PUT, and DELETE HTTP requests with lazy concurrency.
+  </Card>
+  <Card title="json" icon="brackets-curly" href="/stdlib/json">
+    Parse JSON strings into SCALF values and serialize values back to JSON.
+  </Card>
+  <Card title="math" icon="calculator" href="/stdlib/math">
+    Math constants (`pi`, `e`) and functions (`min`, `max`, `abs`, `round`).
+  </Card>
+  <Card title="path" icon="route" href="/stdlib/path">
+    Join, normalize, and inspect file system paths. Get the current working directory.
+  </Card>
+  <Card title="env" icon="sliders" href="/stdlib/env">
+    Read environment variables safely with permission-gated access.
+  </Card>
+  <Card title="time" icon="clock" href="/stdlib/time">
+    Get Unix timestamps in milliseconds or seconds, and pause execution with sleep.
+  </Card>
+  <Card title="crypto" icon="lock" href="/stdlib/crypto">
+    Compute SHA-256 hashes of strings, returned as lowercase hex digests.
+  </Card>
+  <Card title="concurrency" icon="bolt" href="/stdlib/concurrency">
+    Resolve async values, join concurrent requests, set timeouts, and use channels.
+  </Card>
+</CardGroup>
+
+## Permission requirements
+
+Some modules access system resources and require explicit opt-in flags at invocation time. SCALF follows a deny-by-default security model — a script cannot read files or make network requests unless you grant the corresponding permission.
+
+| Module | Required flag | Example |
+|---|---|---|
+| `std.fs` | `--allow-read`, `--allow-write` | `--allow-read=. --allow-write=output.txt` |
+| `std.http` | `--allow-net` | `--allow-net=api.example.com` |
+| `std.env` | `--allow-env` | `--allow-env` |
+
+Modules that do not touch external resources (`math`, `json`, `path`, `time`, `crypto`, `concurrency`) require no special flags.
+
+<Note>
+  You can grant all permissions at once with `--allow-all`, but this is not recommended for production scripts. Prefer the narrowest permission set your script actually needs.
+</Note>
+
+## Generating stdlib documentation
+
+SCALF can regenerate the stdlib reference from the module source comments at any time:
+
+```bash
+# Print to stdout
+scalf docs
+
+# Write to a specific file
+scalf docs --out=path/to/file.md
+```

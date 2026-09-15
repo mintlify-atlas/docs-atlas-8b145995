@@ -1,0 +1,169 @@
+---
+title: "std.path: File Path Operations in SCALF"
+sidebarTitle: "path"
+description: "Manipulate file paths with std.path: join segments, normalize, extract basename and dirname, and get the current working directory."
+---
+
+The `std.path` module provides cross-platform path manipulation without touching the file system. It works purely with strings and `Path` values — no I/O, no permissions required. Use it to build safe, portable paths before passing them to `std.fs`.
+
+```python
+use std.path as path
+```
+
+## The `Path` type
+
+`std.path` introduces a first-class `Path` runtime type. A `Path` value represents a file system path and can be created with the `Path(...)` constructor or returned by `path.join`, `path.normalize`, and `path.cwd`. To use a `Path` value where a plain string is expected (for example, with `std.fs`), convert it with `path.to_string`.
+
+```python
+use std.path as path
+
+p = Path("./data/files")
+print(path.to_string(p))   # ./data/files
+```
+
+## Functions
+
+### `path.join`
+
+Joins a base path with one or more additional segments, inserting the correct separator for the current platform.
+
+<ParamField path="base" type="string | Path" required>
+  The root path to start from.
+</ParamField>
+
+<ParamField path="segment..." type="string" required>
+  One or more additional path segments to append.
+</ParamField>
+
+<ResponseField name="return" type="Path">
+  A new `Path` value representing the joined path.
+</ResponseField>
+
+```python
+use std.path as path
+
+p = path.join("home", "user", "documents", "report.txt")
+print(path.to_string(p))   # home/user/documents/report.txt
+```
+
+---
+
+### `path.normalize`
+
+Resolves `.` and `..` components and removes redundant separators, returning a clean canonical path.
+
+<ParamField path="path" type="string | Path" required>
+  The path to normalize.
+</ParamField>
+
+<ResponseField name="return" type="Path">
+  The normalized `Path` value.
+</ResponseField>
+
+```python
+use std.path as path
+
+p = path.normalize("./data/../data/./files")
+print(path.to_string(p))   # data/files
+```
+
+---
+
+### `path.basename`
+
+Returns the final component of a path — the file name or last directory segment — without any leading directory part.
+
+<ParamField path="path" type="string | Path" required>
+  The path to extract the base name from.
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The last segment of the path as a plain string.
+</ResponseField>
+
+```python
+use std.path as path
+
+name = path.basename("/home/user/report.txt")
+print(name)   # report.txt
+```
+
+---
+
+### `path.dirname`
+
+Returns the directory portion of a path — everything up to but not including the final segment.
+
+<ParamField path="path" type="string | Path" required>
+  The path to extract the directory from.
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The directory portion of the path as a plain string.
+</ResponseField>
+
+```python
+use std.path as path
+
+dir = path.dirname("/home/user/report.txt")
+print(dir)   # /home/user
+```
+
+---
+
+### `path.cwd`
+
+Returns the current working directory of the running process as a `Path` value.
+
+<ResponseField name="return" type="Path">
+  The current working directory.
+</ResponseField>
+
+```python
+use std.path as path
+
+cwd = path.cwd()
+print(path.to_string(cwd))   # /home/user/projects/my-project
+```
+
+---
+
+### `path.to_string`
+
+Converts a `Path` value to a plain string so it can be passed to functions that expect a string (such as `fs.read` or `fs.write`).
+
+<ParamField path="path" type="Path" required>
+  The `Path` value to convert.
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The string representation of the path.
+</ResponseField>
+
+```python
+use std.path as path
+use std.fs as fs
+
+p = path.join(path.cwd(), "output", "result.txt")
+fs.write(path.to_string(p), "done")
+```
+
+## Example: building output paths at runtime
+
+```python
+use std.path as path
+use std.fs as fs
+
+def write_report(name: string, content: string) {
+  output_dir = path.join(path.cwd(), "reports")
+  file_path  = path.join(output_dir, "{name}.txt")
+  fs.write(path.to_string(file_path), content)
+  print("Wrote: {path.to_string(file_path)}")
+}
+
+write_report("summary", "All checks passed.")
+```
+
+<Tip>
+  Always use `path.join` rather than string concatenation when building paths. `path.join` handles trailing slashes, platform separators, and duplicate segments correctly.
+</Tip>

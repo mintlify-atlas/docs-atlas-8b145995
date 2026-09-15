@@ -1,0 +1,95 @@
+---
+title: "Install SCALF on Linux, macOS, and Windows"
+sidebarTitle: "Installation"
+description: "Build and install the SCALF scripting language runtime from source using Cargo. Requires Rust 1.75+ and takes under a minute."
+---
+
+SCALF is distributed as source code and built with [Cargo](https://rustup.rs), the Rust package manager. There are no pre-built binaries available yet, so you will need a working Rust toolchain (version 1.75 or later) before you begin. If you have not installed Rust, the fastest way is through [rustup.rs](https://rustup.rs), which manages Rust versions and the `cargo` build tool on Linux, macOS, and Windows. The entire build takes under a minute on a modern machine.
+
+## Install from Source
+
+<Steps>
+  <Step title="Install Rust via rustup">
+    Visit [rustup.rs](https://rustup.rs) and follow the instructions for your operating system. On Linux and macOS you can run the installer directly from your terminal:
+
+    ```bash
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+
+    On Windows, download and run `rustup-init.exe` from the same site. Once the installer finishes, open a new terminal and confirm the toolchain is available:
+
+    ```bash
+    rustc --version
+    cargo --version
+    ```
+
+    Both commands should print a version number. Rust 1.75 or later is required.
+  </Step>
+
+  <Step title="Clone the repository">
+    Clone the SCALF repository and change into the project directory:
+
+    ```bash
+    git clone https://github.com/scalf-lang/scalf.git
+    cd scalf
+    ```
+  </Step>
+
+  <Step title="Build and install">
+    To install the `scalf` binary into your Cargo bin directory (typically `~/.cargo/bin`, which is already on your `PATH` after running rustup):
+
+    ```bash
+    cargo install --path .
+    ```
+
+    If you only want to build the binary without installing it system-wide, use:
+
+    ```bash
+    cargo build --release
+    ```
+
+    The release binary will be written to `target/release/scalf` (or `target\release\scalf.exe` on Windows). The release profile is configured for minimum size: `opt-level = "z"`, LTO, single codegen unit, `panic = "abort"`, and symbol stripping.
+  </Step>
+
+  <Step title="Verify the installation">
+    Confirm that `scalf` is accessible and prints its help output:
+
+    ```bash
+    scalf --help
+    ```
+
+    If you used `cargo build --release` instead of `cargo install`, run the binary directly:
+
+    ```bash
+    ./target/release/scalf --help
+    ```
+
+    You should see the list of available flags and subcommands. If the command is not found after `cargo install`, make sure `~/.cargo/bin` is in your `PATH`.
+  </Step>
+</Steps>
+
+## Run from Source Without Installing
+
+During development you can execute scripts directly through Cargo without a separate install step. Pass the script path and any SCALF flags after `--`:
+
+```bash
+cargo run -- examples/hello.scl
+cargo run -- --allow-net=www.google.com examples/http_client.scl
+cargo run -- fmt --check examples/hello.scl
+cargo run -- check examples/hello.scl
+cargo run -- test examples/hello.scl
+```
+
+<Tip>
+  Using `cargo run --` is the fastest iteration loop when you are modifying the SCALF runtime itself. You skip the install step entirely and always run the latest local build. For everyday scripting, `cargo install --path .` is more convenient because `scalf` becomes available everywhere on your system.
+</Tip>
+
+## Run the Test Suite
+
+To verify that your build is correct, run the full test suite:
+
+```bash
+cargo test
+```
+
+All tests should pass. The test suite covers the lexer, parser, type checker, runtime interpreter, bytecode VM, formatter, and the CLI's feature-detection and build-output logic.

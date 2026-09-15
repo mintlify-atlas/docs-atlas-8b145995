@@ -1,0 +1,104 @@
+---
+title: "std.crypto: Hashing Utilities in SCALF"
+sidebarTitle: "crypto"
+description: "Compute SHA-256 hashes of strings with SCALF's built-in std.crypto module. Returns a lowercase hexadecimal digest."
+---
+
+The `std.crypto` module provides cryptographic hashing for SCALF scripts. The current implementation exposes SHA-256, a widely-used one-way hash function. The digest is always returned as a 64-character lowercase hexadecimal string. No permissions are required — hashing is a pure in-process computation.
+
+```python
+use std.crypto as crypto
+```
+
+## Functions
+
+### `crypto.sha256`
+
+Computes the SHA-256 hash of a string and returns it as a lowercase hexadecimal digest.
+
+<ParamField path="text" type="string" required>
+  The input string to hash. The function hashes the raw UTF-8 bytes of the string.
+</ParamField>
+
+<ResponseField name="return" type="string">
+  A 64-character lowercase hexadecimal string representing the SHA-256 digest of the input.
+</ResponseField>
+
+```python
+use std.crypto as crypto
+
+digest = crypto.sha256("hello, world")
+print(digest)
+# e.g. b94d27b9934d3e08a52e52d7da7dabfac484efe04294e576c4d37f1b7b0d3b9
+```
+
+Hashing the same input always produces the same digest:
+
+```python
+use std.crypto as crypto
+
+a = crypto.sha256("scalf")
+b = crypto.sha256("scalf")
+print(a == b)   # true
+```
+
+A one-character difference produces a completely different digest:
+
+```python
+use std.crypto as crypto
+
+print(crypto.sha256("scalf"))
+print(crypto.sha256("Scalf"))   # entirely different hash
+```
+
+## Real-world example
+
+### Backup integrity (`backup.scl`)
+
+The backup script hashes each file's contents immediately after reading it. The digest is printed alongside the backup path, giving a quick integrity fingerprint for each archived file:
+
+```python
+#!/usr/bin/env scalf --allow-read=. --allow-write=.
+
+use std.fs
+use std.time
+use std.crypto
+
+def backup_file(source_path: string, timestamp: int) {
+  if !fs.exists(source_path) {
+    print("⚠️  Skipping missing file: {source_path}")
+    return
+  }
+
+  content = fs.read(source_path) or return
+  digest = crypto.sha256(content)
+  safe_name = source_path.replace("/", "_").replace("\\", "_")
+  backup_path = "backup_{timestamp}_{safe_name}.bak"
+
+  fs.write(backup_path, content)
+  print("✓ {source_path} -> {backup_path} ({digest})")
+}
+
+def create_backup() {
+  timestamp = time.now_s()
+  print("📦 Starting backup job: {timestamp}")
+
+  files = [
+    "README.md",
+    "docs/language_spec.md",
+    "plans/plan.md"
+  ]
+
+  for file in files {
+    backup_file(file, timestamp)
+  }
+
+  print("✅ Backup job finished")
+}
+
+create_backup()
+```
+
+<Note>
+  `crypto.sha256` is suitable for integrity verification and content-addressed naming. It is **not** suitable as a password hashing function — SHA-256 alone is too fast for that purpose and lacks salting. Use it for checksums, content IDs, and deduplication keys.
+</Note>

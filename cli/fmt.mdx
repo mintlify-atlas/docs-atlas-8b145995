@@ -1,0 +1,131 @@
+---
+title: "scalf fmt: Format SCALF Source Files"
+sidebarTitle: "fmt"
+description: "Automatically format SCALF source files with scalf fmt. Use --check in CI to verify formatting without writing changes."
+---
+
+`scalf fmt` is the official code formatter for SCALF. It parses your source file, runs it through the canonical pretty-printer, and writes the result back in-place. Because the formatter works from the parsed AST, it is guaranteed to produce syntactically valid output that is semantically identical to the original.
+
+## Synopsis
+
+```bash
+scalf fmt [--check] <file>
+```
+
+## How It Works
+
+<Steps>
+  <Step title="Read source">
+    The file at `<file>` is read from disk.
+  </Step>
+  <Step title="Parse and type-check">
+    The source is lexed, parsed, and type-checked. Formatting is only attempted on valid programs — a file with syntax or type errors will not be modified.
+  </Step>
+  <Step title="Format">
+    The AST is pretty-printed using SCALF's canonical style rules: consistent two-space indentation, normalised whitespace around operators, and a single trailing newline.
+  </Step>
+  <Step title="Write or compare">
+    In normal mode, the formatted output is written back to the original file. In `--check` mode, the output is compared to the current file contents without writing — differences cause a non-zero exit code.
+  </Step>
+</Steps>
+
+## Flags
+
+<ParamField query="--check" type="boolean">
+  Compare the formatted output against the existing file without writing any changes. Exits `0` if the file is already formatted, or exits non-zero with a diagnostic message if it differs. Designed for use in CI pipelines.
+
+  ```bash
+  scalf fmt --check hello.scl
+  ```
+</ParamField>
+
+## Output Examples
+
+**Formatting a file (write mode)**
+
+```bash
+scalf fmt hello.scl
+```
+
+```
+formatted hello.scl
+```
+
+**File already matches canonical style (check mode)**
+
+```bash
+scalf fmt --check hello.scl
+```
+
+```
+fmt check passed: hello.scl
+```
+
+**File differs from canonical style (check mode)**
+
+```bash
+scalf fmt --check hello.scl
+# exits non-zero
+```
+
+```
+formatting differs for 'hello.scl'; run `scalf fmt hello.scl`
+```
+
+## What the Formatter Normalises
+
+The formatter re-prints the entire program from the AST, which means it normalises:
+
+- **Indentation** — two spaces per nesting level throughout
+- **Operator spacing** — one space on each side of binary operators (`+`, `==`, `and`, etc.)
+- **Call spacing** — no space between a function name and its argument list
+- **Block braces** — opening brace on the same line as the statement header
+- **String escaping** — escape sequences inside strings are normalised (`\\`, `\"`, `\n`, `\r`, `\t`)
+- **Trailing newline** — the file always ends with exactly one newline character
+- **Map keys** — plain identifier keys are written without quotes; keys requiring escaping are quoted
+
+<Note>
+  Comments are not yet preserved by the formatter. If your file contains inline comments, they will be removed when `scalf fmt` writes the output. Track this on the SCALF issue tracker.
+</Note>
+
+## CI Integration
+
+Add a `scalf fmt --check` step to your CI pipeline to enforce consistent style across all contributors without any manual review.
+
+<CodeGroup>
+```yaml GitHub Actions
+- name: Check formatting
+  run: scalf fmt --check src/main.scl
+```
+
+```bash Pre-commit hook (.git/hooks/pre-commit)
+#!/bin/sh
+scalf fmt --check "$1"
+```
+</CodeGroup>
+
+<Tip>
+  Run `scalf fmt` locally before committing to ensure the CI check passes. You can integrate it as a pre-save action in your editor using the SCALF language server or a shell watcher.
+</Tip>
+
+## Example: Before and After
+
+**Before formatting**
+
+```python
+def greet( name:string )->string{
+return "hello, "+name
+}
+x=greet("scalf")
+print(x)
+```
+
+**After `scalf fmt`**
+
+```python
+def greet(name: string) -> string {
+  return "hello, " + name
+}
+x = greet("scalf")
+print(x)
+```

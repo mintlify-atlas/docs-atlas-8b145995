@@ -1,0 +1,311 @@
+---
+title: "Modules and Imports in SCALF"
+sidebarTitle: "Modules"
+description: "Import stdlib modules, local files, or remote URLs with the use statement. SCALF verifies remote imports via a content-addressed lockfile."
+---
+
+SCALF's module system lets you pull in standard-library namespaces, local `.scl` files, and remotely-hosted scripts through a single, uniform `use` statement. Remote imports are automatically cached on disk and verified via a content-addressed lockfile, so your program's external dependencies are both reproducible and auditable. This page covers all three import forms, the lockfile mechanism, available stdlib modules, and doc generation.
+
+## The `use` Statement
+
+The syntax of a `use` statement is:
+
+```python
+use <target> as <alias>
+```
+
+`<target>` is either a dotted module path (for stdlib), a quoted relative file path, or a quoted URL. The `as <alias>` clause is optional — when omitted, the last segment of the module path (or a sanitised version of the filename) becomes the binding name.
+
+## Importing Standard-Library Modules
+
+Prefix any stdlib module path with `std.` followed by the module name:
+
+```python
+use std.fs
+use std.http
+use std.json
+use std.math
+use std.path
+use std.env
+use std.time
+use std.crypto
+use std.concurrency
+```
+
+Supply an alias with `as` to shorten long names. The `release_validation.scl` file uses every stdlib module with short aliases:
+
+```python
+use std.math        as m
+use std.json        as j
+use std.path        as p
+use std.fs          as files
+use std.env         as e
+use std.http        as net
+use std.time        as clock
+use std.crypto      as hash
+use std.concurrency as c
+```
+
+## Available Standard-Library Modules
+
+<Accordion title="std.fs — File System">
+
+Read, write, delete, and query files on disk. Requires the `--allow-read` and/or `--allow-write` permission flags at runtime.
+
+```python
+use std.fs
+
+fs.write("output.txt", "hello")
+content = fs.read("output.txt")
+assert fs.exists("output.txt")
+fs.delete("output.txt")
+```
+
+</Accordion>
+
+<Accordion title="std.http — HTTP Client">
+
+Make GET, POST, PUT, and DELETE requests. Requires `--allow-net=<domains>`.
+
+```python
+use std.http as net
+
+resp    = net.get("https://jsonplaceholder.typicode.com/todos/1", 10000)
+parsed  = resp.json()
+assert parsed["id"] == 1
+
+post_resp = net.post("https://api.example.com/items", {name: "thing"}, 5000)
+assert post_resp.status >= 200
+```
+
+Response objects expose `.status`, `.url`, `.headers`, `.text()`, and `.json()`.
+
+</Accordion>
+
+<Accordion title="std.json — JSON Serialisation">
+
+Parse JSON strings into SCALF values and stringify SCALF values back to JSON.
+
+```python
+use std.json as j
+
+payload = {name: "scalf", version: 8, ok: true}
+encoded = j.stringify(payload, true)       # pretty-print when true
+decoded = j.parse(encoded)
+assert decoded["name"] == "scalf"
+```
+
+</Accordion>
+
+<Accordion title="std.math — Maths Functions">
+
+Common mathematical constants and functions.
+
+```python
+use std.math as m
+
+assert m.round(m.pi) == 3
+assert m.max(2, 5)   == 5.0
+assert m.min(2, 5)   == 2.0
+assert m.abs(-7)     == 7
+```
+
+</Accordion>
+
+<Accordion title="std.path — Path Manipulation">
+
+Build, decompose, and normalise file-system paths in a cross-platform way.
+
+```python
+use std.path as p
+
+full  = p.join(p.cwd(), "release_validation.scl")
+base  = p.basename(full)     # "release_validation.scl"
+norm  = p.normalize(full)
+assert p.to_string(norm) == p.to_string(p.normalize(full))
+```
+
+</Accordion>
+
+<Accordion title="std.env — Environment Variables">
+
+Read process environment variables. Requires `--allow-env`.
+
+```python
+use std.env as e
+
+home = e.get("HOME")
+missing = e.get("SCALF_RELEASE_VALIDATION_MISSING")
+assert missing == nil
+```
+
+</Accordion>
+
+<Accordion title="std.time — Time and Sleep">
+
+Query the current time and pause execution.
+
+```python
+use std.time as clock
+
+start_ms = clock.now_ms()
+start_s  = clock.now_s()
+clock.sleep(5)              # sleep for 5 milliseconds
+finish_ms = clock.now_ms()
+assert finish_ms >= start_ms
+```
+
+Also used in `backup.scl` for timestamping:
+
+```python
+use std.time
+timestamp = time.now_s()
+```
+
+</Accordion>
+
+<Accordion title="std.crypto — Cryptographic Hashes">
+
+Hash strings using SHA-256 and other algorithms.
+
+```python
+use std.crypto as hash
+
+digest = hash.sha256("abc")
+assert digest == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+assert hash.sha256("scalf") == crypto.sha256("scalf")
+```
+
+</Accordion>
+
+<Accordion title="std.concurrency — Async and Channels">
+
+Join parallel tasks, await single futures, set timeouts, and communicate via channels.
+
+```python
+use std.concurrency as c
+
+# Run HTTP requests concurrently and wait for all results
+pending_a = net.get(url, 10000)
+pending_b = net.get(url, 10000)
+joined    = c.join([pending_a, pending_b])
+assert joined[0].status >= 200
+assert joined[1].status >= 200
+
+# Await a single future
+awaited = c.await(net.get(url, 10000))
+
+# Timeout with a fallback value
+result = c.timeout(5, 123)    # returns 123 after 5 ms
+
+# Channels
+ch = c.channel()
+ch.send(1)
+ch.send(2)
+sum = ch.recv() + ch.try_recv()
+assert sum == 3
+assert ch.len() == 0
+assert ch.recv_timeout(1) == nil
+```
+
+</Accordion>
+
+## Local File Imports
+
+Import a `.scl` file from the local file system by using a quoted relative path as the target:
+
+```python
+use "./utils.scl" as utils
+use "examples/hello.scl" as local_hello
+
+assert local_hello.name == "scalf"
+```
+
+Paths are resolved relative to the file that contains the `use` statement. The alias becomes the namespace through which you access the module's exported bindings.
+
+## Remote URL Imports
+
+Import a script directly from a URL. The version is pinned with the `@version` suffix:
+
+```python
+use "https://raw.githubusercontent.com/MINTILER-DEV/rask/main/examples/hello.scl@main" as remote_hello
+
+assert len(remote_hello.name) > 0
+```
+
+On the **first** import, SCALF:
+
+1. Fetches the remote source over the network (requires `--allow-net=<domain>`).
+2. Computes the SHA-256 hash of the downloaded content.
+3. Writes the content to the cache: `$HOME/.rask/cache/modules/<sha256>.rask`.
+4. Records the hash in the lockfile: `.scl.lock` in the current directory.
+
+On **subsequent** imports, SCALF reads from the cache and verifies the hash against `.scl.lock`. If the hash does not match, the import is rejected.
+
+<Warning>
+Never delete or edit `.scl.lock` manually. If you intentionally want to update a remote dependency, delete the lockfile entry and re-run your program with network access to re-fetch and re-pin.
+</Warning>
+
+<Note>
+The cache directory can be overridden with the `RASK_CACHE_DIR` environment variable. The lockfile path can be overridden with `RASK_LOCKFILE`.
+</Note>
+
+### Verifying the lockfile exists
+
+```python
+test "imports_and_std_module_aliases" {
+  assert local_hello.name == "scalf"
+  assert len(remote_hello.name) > 0
+  assert files.exists(".scl.lock")   # lockfile was created
+}
+```
+
+## Namespace Isolation for URL Imports
+
+Each remote import is bound under its alias and cannot affect or pollute the global namespace. Symbols from two different remote imports never collide:
+
+```python
+use "https://example.com/math_extras.scl@v1" as extras
+use "https://other.example.com/format.scl@v2" as fmt
+
+result = extras.lerp(0.0, 1.0, 0.5)
+text   = fmt.currency(result)
+```
+
+## Runtime Permission Flags
+
+Imports that touch the file system, network, or environment require explicit permission flags passed to the `scalf` binary:
+
+```bash
+# Allow reading and writing the current directory, plus two external hosts
+scalf run program.scl --allow-read=. --allow-write=. \
+      --allow-net=raw.githubusercontent.com,jsonplaceholder.typicode.com
+
+# Allow everything (useful for development)
+scalf run program.scl --allow-all
+
+# Require network for a specific domain only
+scalf run weather.scl --allow-net=wttr.in
+```
+
+| Flag                        | Description                                  |
+|-----------------------------|----------------------------------------------|
+| `--allow-read=<path,...>`   | Permit reading from the listed paths         |
+| `--allow-write=<path,...>`  | Permit writing to the listed paths           |
+| `--allow-net=<domain,...>`  | Permit outbound HTTP to the listed domains   |
+| `--allow-env`               | Permit reading environment variables         |
+| `--allow-all`               | Permit all of the above                      |
+
+## Doc Generation from Stdlib Comments
+
+The `scalf docs` command generates a Markdown reference document by extracting top-of-file doc comments from every file in `stdlib/std/*.scl`:
+
+```bash
+# Generate to the default output path (docs/stdlib_reference.md)
+scalf docs
+
+# Override the output path
+scalf docs --out=path/to/reference.md
+```
+
+This is useful for keeping your project's documentation in sync with whatever version of the standard library is installed.

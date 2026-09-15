@@ -1,0 +1,167 @@
+---
+title: "Permissions: Safe Scripting with SCALF's Sandbox"
+sidebarTitle: "Permissions"
+description: "SCALF runs scripts with no permissions by default. Grant read, write, network, and environment access explicitly using permission flags or shebang lines."
+---
+
+SCALF scripts run in a strict sandbox — no access to the filesystem, network, or environment variables unless you explicitly grant it. This deny-by-default model prevents accidental data leaks, limits the blast radius of buggy scripts, and makes supply-chain attacks far harder: a compromised third-party module cannot exfiltrate credentials or write arbitrary files unless you've given it permission to do so.
+
+## Permission flags
+
+Pass permission flags on the command line when invoking `scalf`, or embed them directly in your script's shebang line (see [Shebang line permissions](#shebang-line-permissions) below).
+
+<ParamField path="--allow-read" type="string">
+  Comma-separated list of filesystem paths the script is allowed to read from.
+  Relative paths are resolved against the current working directory and then
+  normalized. Pass `.` to allow reads from the entire current directory tree.
+
+  ```bash
+  scalf --allow-read=./data,/tmp/cache process.scl
+  ```
+</ParamField>
+
+<ParamField path="--allow-write" type="string">
+  Comma-separated list of filesystem paths the script is allowed to write to.
+  Like `--allow-read`, relative paths are resolved and normalized against the
+  working directory.
+
+  ```bash
+  scalf --allow-write=./output,/tmp process.scl
+  ```
+</ParamField>
+
+<ParamField path="--allow-net" type="string">
+  Comma-separated list of domains the script is allowed to open network
+  connections to. Only the listed hostnames are reachable; any other host
+  raises a permission error at runtime.
+
+  ```bash
+  scalf --allow-net=api.example.com,cdn.example.com fetch.scl
+  ```
+</ParamField>
+
+<ParamField path="--allow-env" type="flag">
+  Grants the script read access to environment variables via `std.env`.
+  This is a boolean flag — it takes no value.
+
+  ```bash
+  scalf --allow-env config.scl
+  ```
+</ParamField>
+
+<ParamField path="--allow-all" type="flag">
+  Grants all permissions at once: read, write, network, and environment.
+  Equivalent to passing every `--allow-*` flag simultaneously.
+
+  ```bash
+  scalf --allow-all script.scl
+  ```
+</ParamField>
+
+<ParamField path="--prompt-permissions" type="flag">
+  Enables interactive mode. Instead of hard-failing when a permission is
+  missing, SCALF pauses and asks the user whether to grant it. Useful for
+  exploratory scripts where you want to discover what a script needs without
+  pre-authorising everything.
+
+  ```bash
+  scalf --prompt-permissions explore.scl
+  ```
+</ParamField>
+
+<Warning>
+  Using `--allow-all` bypasses all sandbox restrictions. Only pass it when you
+  fully trust the script and every module it imports. Prefer narrow
+  `--allow-read`, `--allow-write`, and `--allow-net` grants in production.
+</Warning>
+
+## Shebang line permissions
+
+You can bake permission flags into the script itself with a Unix shebang line. When the file is executed directly, the kernel passes the shebang arguments to `scalf` before running the script — no extra flags needed at the call site.
+
+**`http_client.scl`** — network-only access to a single domain:
+
+```python
+#!/usr/bin/env scalf --allow-net=www.google.com
+use std.http
+
+response = http.get("https://www.google.com/")
+print(response.status)
+```
+
+**`file_processor.scl`** — read from current directory, write to a specific file:
+
+```python
+#!/usr/bin/env scalf --allow-read=. --allow-write=output.txt
+use std.fs
+
+content = fs.read("input.txt")
+print(content)
+```
+
+Shebang permissions and command-line flags are additive. If you run `scalf --allow-env file_processor.scl`, the script ends up with read, write, and env permissions combined.
+
+## Path scoping
+
+Both `--allow-read` and `--allow-write` accept any combination of relative and absolute paths separated by commas.
+
+- **Relative paths** (e.g. `.`, `./data`) are resolved against the working directory at the time `scalf` is invoked and then lexically normalized. `..` components are collapsed, so `--allow-read=./data/../logs` becomes the absolute path to `logs/` in the current directory.
+- **Absolute paths** are normalized in place — no working-directory join needed.
+- **Subdirectory access**: granting `--allow-read=/home/user/project` also allows reads from any path underneath it, such as `/home/user/project/data/report.csv`.
+- **Dot shorthand**: `--allow-read=.` is the idiomatic way to allow reads from the entire current working tree.
+
+```bash
+# Allow reading anything under the current directory
+scalf --allow-read=. report.scl
+
+# Allow writing only to one specific output file
+scalf --allow-read=. --allow-write=./dist/report.json report.scl
+
+# Absolute paths work too
+scalf --allow-read=/var/data,/etc/app.conf audit.scl
+```
+
+## Principle of least privilege
+
+Grant only the permissions a script actually needs — nothing more.
+
+<Steps>
+  <Step title="Start with no flags">
+    Run the script bare. If it raises a permission error, you know exactly which
+    resource it needs.
+  </Step>
+  <Step title="Use --prompt-permissions for exploration">
+    For unfamiliar or third-party scripts, `--prompt-permissions` lets SCALF ask
+    you at each access point rather than pre-authorising everything. Review each
+    prompt before accepting.
+  </Step>
+  <Step title="Scope paths tightly">
+    Prefer `--allow-read=./input` over `--allow-read=.` when the script only
+    needs one subdirectory. Prefer named files over directories when possible.
+  </Step>
+  <Step title="Pin network domains">
+    List only the exact domains the script calls. A script fetching from
+    `api.example.com` should not have `--allow-net=*` or access to unrelated
+    hosts.
+  </Step>
+  <Step title="Embed in the shebang for scripts you own">
+    Once you know a script's required permissions, lock them in the shebang line
+    so future runs never accidentally receive extra grants.
+  </Step>
+</Steps>
+
+## Stdlib module permission requirements
+
+| Module | Required permission |
+|---|---|
+| `std.fs` | `--allow-read` and/or `--allow-write` |
+| `std.http` | `--allow-net=<domain>` |
+| `std.env` | `--allow-env` |
+| `std.path` | none |
+| `std.math` | none |
+| `std.json` | none |
+| `std.time` | none |
+| `std.crypto` | none |
+| `std.concurrency` | none |
+
+Modules with no permission requirement (`std.path`, `std.math`, `std.json`, `std.time`, `std.crypto`, `std.concurrency`) are always available regardless of which flags are passed.

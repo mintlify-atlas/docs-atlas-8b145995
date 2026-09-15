@@ -1,0 +1,197 @@
+---
+title: "scalf run: Execute SCALF Scripts"
+sidebarTitle: "run"
+description: "Run a SCALF script file or pre-compiled bytecode (.sclc). Supports permission flags, VM mode, and shebang-based execution."
+---
+
+Running a SCALF script is the default action of the `scalf` binary — just pass a file path. The runtime is secure by default: network, filesystem, and environment access are all denied unless you explicitly grant permissions via flags.
+
+## Synopsis
+
+```bash
+# Run a source file
+scalf <file>.scl [flags]
+
+# Run a pre-compiled bytecode cache file
+scalf <file>.sclc
+```
+
+## How Execution Works
+
+When you run a `.scl` source file, `scalf` performs the following steps in order:
+
+<Steps>
+  <Step title="Lex">
+    The source text is tokenised. Any lexer error reports a `LEX0001` diagnostic with file, line, and column, plus a link to the error docs at `https://scalf-lang.github.io/errors/LEX0001`.
+  </Step>
+  <Step title="Parse">
+    Tokens are fed into the recursive-descent parser, which builds a typed AST. Parse errors include source context and a caret pointing at the problem span.
+  </Step>
+  <Step title="Type-check">
+    The type checker walks the AST and verifies type safety. Multiple type errors are collected and reported together before execution begins.
+  </Step>
+  <Step title="Execute">
+    If all earlier phases succeed, the program is handed to the runtime. By default this is the tree-walking interpreter; pass `--vm` to use the bytecode VM instead.
+  </Step>
+</Steps>
+
+## Running Bytecode Cache Files
+
+Bytecode cache files (`.sclc`) produced by `scalf cache` can be run directly. `scalf` detects the `.sclc` extension automatically and routes execution straight to the VM, skipping lex/parse/typecheck entirely.
+
+```bash
+# Compile once
+scalf cache hello.scl
+
+# Run many times with no parse overhead
+scalf hello.sclc
+```
+
+<Note>
+  `.sclc` files are not portable across SCALF versions. Regenerate the cache after upgrading.
+</Note>
+
+## Flags
+
+<ParamField query="--vm" type="boolean">
+  Execute the script using the bytecode VM instead of the default tree-walking interpreter. The script is compiled to an in-memory bytecode chunk, then the VM runs the chunk.
+
+  ```bash
+  scalf server.scl --vm
+  ```
+
+  <Note>
+    `--vm` requires a script path. Passing `--vm` with no file path is an error.
+  </Note>
+</ParamField>
+
+<ParamField query="--implicit-nil" type="boolean">
+  Treat reads of undeclared variables as `nil` instead of raising a type error or runtime error. Useful when adapting loosely-typed scripts.
+
+  ```bash
+  scalf legacy.scl --implicit-nil
+  ```
+</ParamField>
+
+<ParamField query="--allow-read" type="string">
+  Grant read access to one or more filesystem paths. Accepts a comma-separated list. Relative paths are resolved against the current working directory.
+
+  ```bash
+  scalf file_processor.scl --allow-read=/data/input,/tmp
+  ```
+</ParamField>
+
+<ParamField query="--allow-write" type="string">
+  Grant write access to one or more filesystem paths.
+
+  ```bash
+  scalf file_processor.scl --allow-write=/tmp/output
+  ```
+</ParamField>
+
+<ParamField query="--allow-net" type="string">
+  Grant network access to specific domains. The script may only connect to the listed hosts.
+
+  ```bash
+  scalf http_client.scl --allow-net=api.example.com
+  ```
+</ParamField>
+
+<ParamField query="--allow-env" type="boolean">
+  Allow the script to read environment variables via `std.env`.
+
+  ```bash
+  scalf config.scl --allow-env
+  ```
+</ParamField>
+
+<ParamField query="--allow-all" type="boolean">
+  Grant all permissions at once.
+
+  ```bash
+  scalf script.scl --allow-all
+  ```
+</ParamField>
+
+<ParamField query="--prompt-permissions" type="boolean">
+  Prompt the user interactively at runtime whenever the script requests a permission that has not been pre-granted.
+</ParamField>
+
+## Examples
+
+**Hello world**
+
+```bash
+scalf hello.scl
+```
+
+```python
+# hello.scl
+name = "world"
+print("hello, {name}")
+```
+
+**HTTP client with a network permission grant**
+
+```bash
+scalf http_client.scl --allow-net=api.example.com
+```
+
+```python
+# http_client.scl
+use std.http as http
+
+response = http.get("https://api.example.com/status")
+print(response.text())
+```
+
+**File processor with read and write access**
+
+```bash
+scalf file_processor.scl --allow-read=/data --allow-write=/tmp
+```
+
+```python
+# file_processor.scl
+use std.fs as fs
+use std.path as path
+
+input  = fs.read("/data/records.csv")
+output = path.join("/tmp", "out.txt")
+fs.write(output, input.trim().uppercase())
+print("wrote {output}")
+```
+
+**Using the bytecode VM**
+
+```bash
+scalf compute.scl --vm
+```
+
+## Shebang Support
+
+Add a shebang line at the top of any `.scl` file to make it directly executable on Unix systems. Permission flags are included in the shebang as arguments to `scalf`.
+
+```python
+#!/usr/bin/env scalf --allow-net=example.com
+use std.http as http
+
+response = http.get("https://example.com/api")
+print(response.text())
+```
+
+```python
+#!/usr/bin/env scalf --allow-read=/data --allow-write=/tmp
+use std.fs as fs
+content = fs.read("/data/source.txt")
+fs.write("/tmp/dest.txt", content)
+```
+
+```bash
+chmod +x fetch.scl
+./fetch.scl
+```
+
+<Tip>
+  Combine `--allow-read`, `--allow-write`, `--allow-net`, and `--allow-env` for fine-grained, least-privilege execution rather than using `--allow-all` in production scripts.
+</Tip>

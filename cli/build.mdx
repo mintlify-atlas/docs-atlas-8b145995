@@ -1,0 +1,228 @@
+---
+title: "scalf build: Compile Scripts to Standalone Binaries"
+sidebarTitle: "build"
+description: "Embed any SCALF script into a self-contained native binary with scalf build. Supports cross-compilation to Linux, macOS, and Windows targets."
+---
+
+`scalf build` compiles a SCALF script into a standalone native binary that anyone can run without having `scalf` installed. The script source is embedded directly into the binary at build time using Cargo's build system. The same page also covers `scalf cache` (compile to bytecode) and `scalf startup` (parse/typecheck benchmark).
+
+## scalf build
+
+### Synopsis
+
+```bash
+scalf build <file> [--target=<alias|triple>] [--out=<path>] [--debug]
+```
+
+### How It Works
+
+<Steps>
+  <Step title="Parse and type-check">
+    The script is lexed, parsed, and type-checked. The build is aborted if any errors are found.
+  </Step>
+  <Step title="Detect required features">
+    SCALF analyses the AST to determine which optional Cargo features the script actually uses (`net`, `json`, `crypto`). Only the required features are compiled in, keeping the binary small.
+  </Step>
+  <Step title="Invoke cargo">
+    `cargo build` is invoked with `--no-default-features`, the detected feature flags, and the script source embedded via the `scalf_EMBEDDED_SCRIPT` environment variable.
+  </Step>
+  <Step title="Copy binary">
+    The finished binary is copied to the output path (defaulting to the script's file stem, e.g. `hello` or `hello.exe`).
+  </Step>
+</Steps>
+
+### Flags
+
+<ParamField query="--target" type="string">
+  Cross-compile for a specific platform. Accepts either a convenience alias or a raw Rust target triple.
+
+  | Alias | Rust triple |
+  |-------|-------------|
+  | `linux-x64` | `x86_64-unknown-linux-gnu` |
+  | `windows-x64` | `x86_64-pc-windows-msvc` |
+  | `macos-arm64` | `aarch64-apple-darwin` |
+
+  ```bash
+  scalf build script.scl --target=linux-x64
+  scalf build script.scl --target=aarch64-apple-darwin
+  ```
+</ParamField>
+
+<ParamField query="--out" type="string">
+  Override the output binary path. Defaults to the script's file stem in the current directory (`hello` on Unix, `hello.exe` on Windows).
+
+  ```bash
+  scalf build script.scl --out=dist/my-tool
+  ```
+</ParamField>
+
+<ParamField query="--debug" type="boolean">
+  Produce a debug build instead of a release build. Debug builds are faster to compile but larger and slower to run.
+
+  ```bash
+  scalf build script.scl --debug
+  ```
+</ParamField>
+
+### Feature Minimisation
+
+`scalf build` inspects the AST for `use` imports and direct module references to decide which optional features to enable:
+
+| Feature | Enabled when |
+|---------|-------------|
+| `net` | Script imports `std.http`, uses `http.get/post/put/delete`, or has a URL `use` import |
+| `json` | Script imports `std.json` or calls `json.parse`/`json.stringify` (and `net` is not already enabled) |
+| `crypto` | Script imports `std.crypto` or calls `crypto.sha256` (and `net` is not already enabled) |
+
+A script that uses only `std.math` and pure computation compiles with no extra features:
+
+```
+built standalone binary: compute (target: host, features: none)
+```
+
+A script that calls `http.get` compiles with the `net` feature (which also bundles `json`):
+
+```
+built standalone binary: client (target: host, features: net)
+```
+
+### Examples
+
+```bash
+# Build for the host platform
+scalf build hello.scl
+
+# Build for Linux x64
+scalf build hello.scl --target=linux-x64
+
+# Build for Windows with a custom output path
+scalf build hello.scl --target=windows-x64 --out=dist/hello.exe
+
+# Debug build
+scalf build hello.scl --debug
+```
+
+**Success output**
+
+```
+built standalone binary: hello (target: host, features: none)
+built standalone binary: hello (target: x86_64-unknown-linux-gnu, features: net)
+```
+
+<Note>
+  `scalf build` requires Rust and Cargo to be installed on the build machine. The resulting binary has no such requirement.
+</Note>
+
+---
+
+## scalf cache {#cache}
+
+`scalf cache` compiles a SCALF script to a `.sclc` bytecode cache file. Cache files skip the lex/parse/typecheck pipeline on every run, making them useful when startup time matters.
+
+### Synopsis
+
+```bash
+scalf cache <file> [--out=<path>]
+```
+
+### Flags
+
+<ParamField query="--out" type="string">
+  Override the output path for the `.sclc` file. If the path has no extension, `.sclc` is appended automatically. Defaults to `<stem>.sclc` in the current directory (e.g. `hello.sclc` for `hello.scl`).
+
+  ```bash
+  scalf cache hello.scl --out=build/hello.sclc
+  ```
+</ParamField>
+
+### Example
+
+```bash
+scalf cache hello.scl
+# wrote bytecode cache: hello.sclc
+
+scalf hello.sclc
+# hello, world
+```
+
+<Warning>
+  Bytecode cache files are not portable across SCALF versions. Regenerate `.sclc` files after upgrading the `scalf` binary.
+</Warning>
+
+---
+
+## scalf startup {#startup}
+
+`scalf startup` benchmarks how long SCALF takes to lex, parse, and type-check a given script. This is useful for profiling cold-start time and enforcing a startup budget in CI.
+
+### Synopsis
+
+```bash
+scalf startup <file> [--iterations=<n>] [--budget-ms=<ms>] [--no-budget] [--vm]
+```
+
+### Flags
+
+<ParamField query="--iterations" type="number" default="25">
+  Number of times to run the lex + parse + typecheck pipeline. The minimum sample value is used for the budget comparison. Must be `>= 1`.
+
+  ```bash
+  scalf startup hello.scl --iterations=50
+  ```
+</ParamField>
+
+<ParamField query="--budget-ms" type="number" default="10">
+  Maximum acceptable startup time in milliseconds, measured as the minimum sample across all iterations. If the minimum exceeds this value, the command exits non-zero.
+
+  ```bash
+  scalf startup hello.scl --budget-ms=5
+  ```
+</ParamField>
+
+<ParamField query="--no-budget" type="boolean">
+  Run the benchmark and print results without failing on any budget threshold.
+
+  ```bash
+  scalf startup hello.scl --no-budget
+  ```
+</ParamField>
+
+<ParamField query="--vm" type="boolean">
+  Include the bytecode compilation step (`lex + parse + typecheck + vm-compile`) in the benchmark rather than stopping after typecheck.
+
+  ```bash
+  scalf startup hello.scl --vm
+  ```
+</ParamField>
+
+### Output Format
+
+```
+startup benchmark (lex+parse+typecheck, iterations=25): min=0.412ms avg=0.531ms max=1.203ms
+startup budget met: 0.412ms <= 10.000ms
+```
+
+When `--vm` is set:
+
+```
+startup benchmark (lex+parse+typecheck+vm-compile, iterations=25): min=0.614ms avg=0.701ms max=1.455ms
+startup budget met: 0.614ms <= 10.000ms
+```
+
+When the budget is exceeded:
+
+```
+startup benchmark (lex+parse+typecheck, iterations=25): min=12.300ms avg=13.100ms max=15.200ms
+startup budget not met: 12.300ms > 10.000ms (use --no-budget to skip failure)
+```
+
+### CI Example
+
+```bash
+# Fail the build if startup takes more than 8ms minimum across 30 iterations
+scalf startup src/main.scl --iterations=30 --budget-ms=8
+```
+
+<Tip>
+  The budget comparison uses the **minimum** sample, not the average. This gives the most stable reading by eliminating OS scheduler noise from slower samples.
+</Tip>

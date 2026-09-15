@@ -1,0 +1,240 @@
+---
+title: "Control Flow in SCALF: if, for, while, match"
+sidebarTitle: "Control Flow"
+description: "SCALF supports if/else, for-in loops, C-style for loops, while loops, and match expressions with destructuring patterns."
+---
+
+SCALF provides the familiar set of imperative control-flow constructs — conditionals, loops, and pattern matching — all using a clean brace-delimited block syntax. Every construct listed here is drawn directly from the language grammar and tested in `release_validation.scl`. This page covers each one with concise, runnable examples.
+
+## `if / else if / else`
+
+The `if` statement evaluates a boolean condition and executes the `then` branch if it is truthy. You can chain `else if` clauses and add a final `else` fallback.
+
+```python
+score = 85
+
+if score >= 90 {
+  print("Grade: A")
+} else if score >= 75 {
+  print("Grade: B")
+} else if score >= 60 {
+  print("Grade: C")
+} else {
+  print("Grade: F")
+}
+```
+
+Conditions do not need parentheses. The result of the `if` block can feed into broader logic:
+
+```python
+total = 12
+
+if total == 12 {
+  total = total + 8    # total becomes 20
+} else {
+  total = 0
+}
+
+assert total == 20
+```
+
+## `while` Loops
+
+`while` repeatedly executes its body as long as its condition is truthy:
+
+```python
+total = 10
+
+while total < 20 {
+  total = total + 1
+}
+
+# total is now 20
+```
+
+<Tip>
+There is no `do…while` or `break`/`continue` in SCALF. Structure your loops so they naturally terminate, or use a `match`-based early return inside a helper function.
+</Tip>
+
+## `for item in collection` — Range Iteration
+
+The `for…in` loop iterates over any iterable value: a list, a map (iterates keys), or a string (iterates grapheme clusters).
+
+<Tabs>
+  <Tab title="List">
+    ```python
+    list_sum = 0
+    for n in [1, 2, 3] {
+      list_sum = list_sum + n
+    }
+    assert list_sum == 6
+    ```
+  </Tab>
+  <Tab title="String (graphemes)">
+    ```python
+    grapheme_count = 0
+    for ch in "ok" {
+      grapheme_count = grapheme_count + len(ch)
+    }
+    assert grapheme_count == 2
+    ```
+  </Tab>
+  <Tab title="Map (keys)">
+    ```python
+    map_key_chars = 0
+    for k in {ab: 1, cd: 2} {
+      map_key_chars = map_key_chars + len(k)
+    }
+    assert map_key_chars == 4
+    ```
+  </Tab>
+  <Tab title="Real-world (tasklist)">
+    ```python
+    def listTasks(tasks) {
+      print("\n📋 Tasks:")
+      for task in tasks {
+        status = match task.done {
+          "true" => "✓"
+          _      => "○"
+        }
+        emoji = match task.priority {
+          "high"   => "🔴"
+          "medium" => "🟡"
+          _        => "🟢"
+        }
+        print("  {status} {emoji} {task.description}")
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## C-style `for` Loops
+
+When you need an explicit index or a numeric range, use the C-style `for` with an initializer, a condition, and an increment expression, all separated by `;`:
+
+```python
+total = 0
+for i = 0; i < 5; i = i + 1 {
+  total = total + i
+}
+# total == 0 + 1 + 2 + 3 + 4 == 10
+```
+
+<Note>
+The initializer (`i = 0`) is a variable declaration local to the loop. The increment (`i = i + 1`) is an expression evaluated at the end of each iteration.
+</Note>
+
+All three clauses are optional — omitting the condition creates an infinite loop:
+
+```python
+for ; ; {
+  # runs forever
+}
+```
+
+## `match` Expressions
+
+`match` is SCALF's most powerful control-flow expression. It evaluates a subject expression and tests it against a series of *pattern arms*, returning the value of the first matching arm.
+
+### Value matching
+
+```python
+status = match 200 {
+  200 => "ok"
+  404 => "not found"
+  500 => "server error"
+  _   => "unknown"
+}
+```
+
+### String value matching
+
+```python
+emoji = match task.priority {
+  "high"   => "🔴"
+  "medium" => "🟡"
+  _        => "🟢"
+}
+```
+
+### Map pattern matching
+
+Map patterns match by checking that the specified keys exist and their values match the sub-patterns. Matched values are bound to new variables inside the arm:
+
+```python
+mapped = match {kind: "point", x: 3} {
+  {kind: "point", x: x} => x
+  _                      => 0
+}
+assert mapped == 3
+```
+
+### List pattern matching
+
+List patterns match by the number and structure of elements:
+
+```python
+description = match tokens {
+  []           => "empty"
+  [single]     => "one item: {single}"
+  [a, b]       => "two items: {a} and {b}"
+  _            => "many items"
+}
+```
+
+### Wildcard `_`
+
+The `_` pattern matches any value without binding it. It is always placed last and acts as the default arm:
+
+```python
+result = match status_code {
+  200 => "success"
+  _   => "something else"
+}
+```
+
+<Warning>
+SCALF evaluates match arms top-to-bottom and stops at the first match. If you place `_` before more-specific patterns, those patterns will never be reached.
+</Warning>
+
+## `return` — Early Exit from Functions
+
+`return` exits the enclosing function, optionally providing a value. It can appear anywhere in a function body:
+
+```python
+def backup_file(source_path: string, timestamp: int) {
+  if !fs.exists(source_path) {
+    print("⚠️  Skipping missing file: {source_path}")
+    return                          # early return, no value
+  }
+
+  content = fs.read(source_path) or return   # early return on nil
+  # ... rest of the logic ...
+}
+```
+
+When used with `or`, `return` becomes a concise nil-guard:
+
+```python
+content = fs.read("tasks.json") or return []
+```
+
+## `assert` — Runtime Assertions
+
+`assert` checks a condition and aborts execution with an optional message if it is false. It is most useful inside `test` blocks but can appear anywhere:
+
+```python
+assert 2 + 2 == 4
+assert len(parts) == 2, "expected two comma-separated values"
+assert files.exists(output_path), "output file was not created"
+```
+
+Assertions from `release_validation.scl`:
+
+```python
+assert total == 20
+assert list_sum == 6
+assert grapheme_count == 2
+assert (3 * 4) + (10 / 2) - 1 == 16
+```

@@ -1,0 +1,295 @@
+---
+title: "SCALF Syntax and Basic Expressions"
+sidebarTitle: "Syntax"
+description: "Learn SCALF's expression syntax, variable declarations, string interpolation, list and map literals, and pattern matching."
+---
+
+SCALF uses a clean, Python-inspired syntax that is easy to read but carries the guarantees of a statically-typed language. Every `.scl` file is a program made up of statements — variable declarations, function definitions, control-flow blocks, expressions, and more. This page walks through the core syntax building blocks you will use in every SCALF program.
+
+## Comments
+
+Lines beginning with `#` are comments. There are no multi-line comment delimiters — use a `#` on each line.
+
+```python
+# This is a single-line comment
+name = "scalf"  # inline comment
+```
+
+## Variables
+
+Declare a variable by writing an identifier, an optional type annotation, and an initializer expression. The type annotation is separated from the name by `:`.
+
+```python
+# Untyped — type is inferred
+greeting = "hello"
+count     = 0
+enabled   = true
+
+# Explicitly typed
+x: int    = 42
+ratio: float = 3.14
+label: string = "world"
+```
+
+<Note>
+SCALF's typechecker runs automatically before execution. If you supply an annotation that conflicts with the right-hand side, the program will not run.
+</Note>
+
+### Destructuring declarations
+
+A pattern can appear on the left-hand side of a declaration to destructure lists and maps in a single step.
+
+```python
+# List destructuring
+[first, _] = [9, 8]
+
+# Map destructuring
+{name: nm, version: ver} = {name: "scalf", version: 2}
+
+# first == 9, nm == "scalf", ver == 2
+```
+
+## String Interpolation
+
+Embed any expression inside a string literal by wrapping it in `{ }`. The braces are evaluated at runtime and the result is converted to a string.
+
+```python
+name = "scalf"
+interpolated = "hello, {name}"          # "hello, scalf"
+with_expr    = "2 + 2 = {2 + 2}"       # "2 + 2 = 4"
+nested       = "user: {user.name}"      # member access
+```
+
+To include a literal brace character, escape it with a backslash:
+
+```python
+escaped = "literal: \{name\}"   # "literal: {name}"
+```
+
+## Arithmetic and Comparison Operators
+
+SCALF provides the standard set of arithmetic and comparison operators:
+
+<Tabs>
+  <Tab title="Arithmetic">
+    | Operator | Description    | Example         |
+    |----------|----------------|-----------------|
+    | `+`      | Addition       | `1 + 2` → `3`   |
+    | `-`      | Subtraction    | `5 - 3` → `2`   |
+    | `*`      | Multiplication | `3 * 4` → `12`  |
+    | `/`      | Division       | `10 / 2` → `5`  |
+    | `%`      | Modulo         | `7 % 3` → `1`   |
+
+    ```python
+    result = (3 * 4) + (10 / 2) - 1   # 16
+    is_odd = 7 % 2                      # 1
+    ```
+  </Tab>
+  <Tab title="Comparison">
+    | Operator | Description           |
+    |----------|-----------------------|
+    | `==`     | Equal                 |
+    | `!=`     | Not equal             |
+    | `<`      | Less than             |
+    | `<=`     | Less than or equal    |
+    | `>`      | Greater than          |
+    | `>=`     | Greater than or equal |
+
+    ```python
+    assert 5 == 5
+    assert 3 != 4
+    assert 2 < 10
+    assert 10 >= 10
+    ```
+  </Tab>
+  <Tab title="Boolean">
+    | Operator | Description   | Example                    |
+    |----------|---------------|----------------------------|
+    | `and`    | Logical AND   | `true and false` → `false` |
+    | `or`     | Logical OR    | `false or true` → `true`   |
+    | `!`      | Logical NOT   | `!true` → `false`          |
+
+    ```python
+    logged_in = true
+    has_role  = false
+    can_edit  = logged_in and has_role    # false
+    visible   = logged_in or has_role     # true
+    hidden    = !visible                  # false
+    ```
+  </Tab>
+</Tabs>
+
+## List Literals
+
+Create a list with square brackets. Lists are zero-indexed, and elements are accessed with the `[index]` postfix operator.
+
+```python
+nums   = [3, 1, 2]
+first  = nums[0]        # 3
+second = nums[1]        # 1
+
+# Nested lists
+matrix = [[1, 2], [3, 4]]
+top_left = matrix[0][0]  # 1
+```
+
+### List Comprehensions
+
+Build a new list by transforming or filtering an existing iterable using the comprehension syntax:
+
+```python
+# Double every element greater than 1
+doubled = [x * 2 for x in [1, 2, 3] if x > 1]
+# doubled == [4, 6]
+
+# Fetch weather data for a list of cities concurrently
+requests = [fetchWeather(city) for city in cities]
+```
+
+The `if condition` clause is optional.
+
+## Map Literals
+
+Create a map (a string-keyed dictionary) with `{ key: value }` syntax. Key names are bare identifiers or quoted strings. Access members with `.key` dot notation or `["key"]` bracket notation.
+
+```python
+task = {
+  id:          "1",
+  description: "Write documentation",
+  priority:    "high",
+  done:        "false"
+}
+
+# Member access
+print(task.description)    # "Write documentation"
+
+# Bracket access
+print(task["priority"])    # "high"
+
+# Dynamic field assignment
+task.status = "in-progress"
+task.set("tag", "docs")
+```
+
+Maps can hold values of mixed types:
+
+```python
+info = {name: "scalf", version: 1}
+info.set("ok", true)
+```
+
+## `match` Expressions
+
+`match` tests a value against a series of pattern arms and returns the result of the first arm that matches. Every arm is written as `pattern => expression`.
+
+```python
+# Value matching
+status = match 200 {
+  200 => "ok"
+  _   => "bad"
+}
+
+# Matching on a string field
+priority_emoji = match task.priority {
+  "high"   => "🔴"
+  "medium" => "🟡"
+  _        => "🟢"
+}
+```
+
+<Accordion title="Map pattern matching">
+
+Map patterns let you destructure fields directly inside a match arm:
+
+```python
+result = match {kind: "point", x: 3} {
+  {kind: "point", x: x} => x
+  _                      => 0
+}
+# result == 3
+```
+
+</Accordion>
+
+<Accordion title="List pattern matching">
+
+List patterns match by structure and bind named elements:
+
+```python
+description = match tokens {
+  [single]     => "one token: {single}"
+  [a, b]       => "two tokens: {a}, {b}"
+  _            => "many tokens"
+}
+```
+
+</Accordion>
+
+The `_` wildcard matches anything and discards the value.
+
+## Optional Chaining and Nil Safety
+
+SCALF provides three postfix operators for working with values that may be `nil`:
+
+<CodeGroup>
+
+```python Optional chaining ?.
+# Returns nil instead of panicking if the left side is nil
+profile = nil
+shown = profile?.name    # nil  (no panic)
+```
+
+```python Panic unwrap !
+# Asserts the value is non-nil at runtime; panics if it is nil
+value = maybe_value(7)!   # unwraps; panics if nil
+```
+
+```python or coalescing
+# Returns the right-hand side when the left side is nil (or falsy)
+maybe_user: string? = nil
+display = maybe_user or "anon"   # "anon"
+
+# or return — return early with a value when nil
+content = fs.read(source_path) or return
+```
+
+</CodeGroup>
+
+A real-world example combining all three, from `backup.scl`:
+
+```python
+def backup_file(source_path: string, timestamp: int) {
+  if !fs.exists(source_path) {
+    print("⚠️  Skipping missing file: {source_path}")
+    return
+  }
+
+  content = fs.read(source_path) or return   # skip if read fails
+  digest  = crypto.sha256(content)
+  safe_name   = source_path.replace("/", "_").replace("\\", "_")
+  backup_path = "backup_{timestamp}_{safe_name}.bak"
+
+  fs.write(backup_path, content)
+  print("✓ {source_path} -> {backup_path} ({digest})")
+}
+```
+
+## The `print` Statement
+
+`print` outputs a value to standard output. It can be called with or without parentheses:
+
+```python
+print "Hello, world!"
+print("Hello, {name}!")   # with interpolation
+```
+
+## `assert` Statements
+
+`assert` verifies a condition at runtime. An optional second argument provides the failure message:
+
+```python
+assert 2 + 2 == 4
+assert len(parts) == 2, "expected two comma-separated parts"
+```
+
+Assertions are used extensively inside `test` blocks (see [Functions](/language/functions)) to validate program behaviour.

@@ -1,20 +1,73 @@
 ---
-title: "Introduction"
-description: "Welcome to your project"
+title: "SCALF: Scripting Without the Setup"
+sidebarTitle: "Home"
+description: "SCALF is a statically-typed scripting language built for predictability — no dependency hell, secure by default, with a built-in formatter, test runner, and standalone binary builder."
 ---
 
-Write a short description of your product here. What it does, who it's for, and what they can accomplish with it.
+SCALF is a scripting language designed for developers who want predictable, zero-setup automation. Write a `.scl` script, run it with `scalf`, and get a type-checked, permission-sandboxed execution — no package manager, no runtime installs, no surprises. When you're ready, compile it into a self-contained binary for any platform.
 
-<Tip>
-  Ready to make this your own? Start by editing this page. Update your `docs.json` file to customize your site. Then fill out the [Quickstart](/quickstart) page.
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install SCALF from source with Cargo in under a minute.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Write and run your first SCALF script in five minutes.
+  </Card>
+  <Card title="Language Reference" icon="book" href="/language/syntax">
+    Explore SCALF's syntax, type system, and built-in patterns.
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Every command and flag: run, fmt, check, test, build, and more.
+  </Card>
+  <Card title="Standard Library" icon="cube" href="/stdlib/overview">
+    Built-in modules for files, HTTP, JSON, crypto, time, and concurrency.
+  </Card>
+  <Card title="Permissions Guide" icon="shield" href="/guides/permissions">
+    Understand SCALF's sandboxed permission model for safe scripting.
+  </Card>
+</CardGroup>
 
-<Card title="Quickstart" icon="rocket" href="/quickstart">
-  This card links to the quickstart page in your project.
-</Card>
-<Card title="Components" icon="puzzle-piece" href="https://mintlify.com/docs/components">
-  Add cards, callouts, steps, tabs, and more to design and structure your pages.
-</Card>
-<Card title="Settings" icon="gear" href="https://mintlify.com/docs/organize/settings">
-  Set your site name, branding, and navigation in the `docs.json` file.
-</Card>
+## What makes SCALF different
+
+<CardGroup cols={2}>
+  <Card title="Secure by Default" icon="lock">
+    Scripts run with no permissions unless you explicitly grant them. Network, filesystem, and environment access are all opt-in.
+  </Card>
+  <Card title="Zero Setup" icon="bolt">
+    No `npm install`, no `pip`, no `go get`. Import stdlib modules with `use std.http` — they ship with the runtime.
+  </Card>
+  <Card title="Type-Checked" icon="check">
+    A static type checker catches errors before your script runs. Nullable types, union types, generics, and optional chaining are all first-class.
+  </Card>
+  <Card title="Built-in Tooling" icon="wrench">
+    Format with `scalf fmt`, lint with `scalf check`, test with `scalf test`. No configuration files required.
+  </Card>
+  <Card title="Standalone Binaries" icon="box">
+    Compile any script into a self-contained executable for Linux, macOS, or Windows with `scalf build`.
+  </Card>
+  <Card title="URL Imports" icon="link">
+    Import remote modules directly from URLs. SCALF caches them content-addressed and verifies integrity via a lockfile.
+  </Card>
+</CardGroup>
+
+## Get started in 3 steps
+
+<Steps>
+  <Step title="Install SCALF">
+    ```bash
+    cargo install --path .
+    ```
+    Or build directly: `cargo build --release`
+  </Step>
+  <Step title="Write a script">
+    ```python hello.scl
+    name = "world"
+    print("Hello, {name}!")
+    ```
+  </Step>
+  <Step title="Run it">
+    ```bash
+    scalf hello.scl
+    ```
+  </Step>
+</Steps>

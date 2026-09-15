@@ -1,0 +1,278 @@
+---
+title: "std.concurrency: Async Values and Channels in SCALF"
+sidebarTitle: "concurrency"
+description: "Resolve async values, join concurrent requests, set timeouts, and pass data between contexts using SCALF's concurrency helpers."
+---
+
+The `std.concurrency` module contains the runtime helpers that make SCALF's lazy concurrency model practical to work with. SCALF does not require `async`/`await` keywords — values like HTTP responses start resolving in the background as soon as they are created. The `concurrency` module provides the tools to wait for those values, collect many of them at once, impose time limits, and pass data between contexts using channels.
+
+```python
+use std.concurrency as concurrency
+```
+
+## Lazy values and how resolution works
+
+When you call `http.get(...)`, SCALF dispatches the request immediately and returns a *pending value*. The script continues executing. The pending value only *blocks* when something needs its content — for instance, when you read `.status` or call `.text()`. This is the lazy resolution model.
+
+The `concurrency` module gives you explicit control over when and how pending values are resolved:
+
+- `concurrency.await` — resolve a single pending value
+- `concurrency.join` — resolve a list of pending values concurrently, blocking until all are done
+- `concurrency.timeout` — resolve a pending value, but give up after a deadline
+
+## Functions
+
+### `concurrency.await`
+
+Blocks until the given pending value has resolved, then returns the resolved result.
+
+<ParamField path="value" type="any" required>
+  A pending (lazy) value to resolve. If the value is already resolved, it is returned immediately.
+</ParamField>
+
+<ResponseField name="return" type="value">
+  The resolved value.
+</ResponseField>
+
+```python
+use std.http as http
+use std.concurrency as concurrency
+
+response = http.get("https://api.example.com/data")
+resolved = concurrency.await(response)
+print(resolved.status)
+```
+
+---
+
+### `concurrency.join`
+
+Takes a list of pending values and resolves all of them concurrently, blocking until every item in the list has resolved. Returns a list of results in the same order as the input.
+
+<ParamField path="list" type="List<any>" required>
+  A list of pending values to resolve concurrently.
+</ParamField>
+
+<ResponseField name="return" type="List<value>">
+  A list of resolved values, in the same order as the input list.
+</ResponseField>
+
+```python
+use std.http as http
+use std.concurrency as concurrency
+
+# All three requests are dispatched immediately
+r1 = http.get("https://api.example.com/users")
+r2 = http.get("https://api.example.com/posts")
+r3 = http.get("https://api.example.com/tags")
+
+# Resolves all three concurrently; total wall time ≈ slowest single request
+results = concurrency.join([r1, r2, r3])
+
+for res in results {
+  print(res.status)
+}
+```
+
+---
+
+### `concurrency.timeout`
+
+Resolves a pending value, but gives up after `ms` milliseconds. Returns the resolved value if it arrives in time, or an `Error(...)` value if the deadline is exceeded.
+
+<ParamField path="ms" type="int" required>
+  The maximum number of milliseconds to wait for the value to resolve.
+</ParamField>
+
+<ParamField path="value" type="any" required>
+  The pending value to resolve within the timeout window.
+</ParamField>
+
+<ResponseField name="return" type="value | Error">
+  The resolved value if it completes before the deadline, or an `Error` if the timeout is exceeded.
+</ResponseField>
+
+```python
+use std.http as http
+use std.concurrency as concurrency
+
+response = http.get("https://slow.example.com/data")
+result = concurrency.timeout(3000, response)
+
+if result is Error {
+  print("⏰ Request timed out")
+} else {
+  print("Status: {result.status}")
+}
+```
+
+---
+
+### `concurrency.channel`
+
+Creates and returns a new channel. Channels are the primary mechanism for passing values between concurrent contexts in SCALF — they provide a synchronized, buffered queue.
+
+<ResponseField name="return" type="Channel">
+  A new channel object. See [Channel methods](#channel-methods) below.
+</ResponseField>
+
+```python
+use std.concurrency as concurrency
+
+ch = concurrency.channel()
+ch.send("hello")
+msg = ch.recv()
+print(msg)   # hello
+```
+
+## Channel methods
+
+A channel object returned by `concurrency.channel()` exposes the following methods.
+
+### `channel.send`
+
+Puts a value into the channel's queue.
+
+<ParamField path="value" type="any" required>
+  The value to send.
+</ParamField>
+
+<ResponseField name="return" type="nil">
+  Returns `nil`.
+</ResponseField>
+
+```python
+ch.send("ping")
+ch.send(42)
+```
+
+---
+
+### `channel.recv`
+
+Receives the next value from the channel, blocking until one is available.
+
+<ResponseField name="return" type="value | nil">
+  The next value from the channel, or `nil` if the channel is closed.
+</ResponseField>
+
+```python
+msg = ch.recv()
+print(msg)
+```
+
+---
+
+### `channel.try_recv`
+
+Attempts to receive a value from the channel without blocking. Returns immediately.
+
+<ResponseField name="return" type="value | nil">
+  The next value from the channel if one is available, or `nil` if the channel is empty.
+</ResponseField>
+
+```python
+msg = ch.try_recv()
+if msg != nil {
+  print("Got: {msg}")
+} else {
+  print("Nothing ready yet")
+}
+```
+
+---
+
+### `channel.recv_timeout`
+
+Receives the next value from the channel, but gives up after the given number of milliseconds.
+
+<ParamField path="ms" type="int" required>
+  The maximum number of milliseconds to wait for a value.
+</ParamField>
+
+<ResponseField name="return" type="value | nil">
+  The next value from the channel if it arrives within the timeout, or `nil` if it does not.
+</ResponseField>
+
+```python
+msg = ch.recv_timeout(500)
+if msg == nil {
+  print("Timed out waiting for message")
+}
+```
+
+---
+
+### `channel.len`
+
+Returns the number of values currently buffered in the channel (not yet received).
+
+<ResponseField name="return" type="int">
+  The number of values waiting in the channel queue.
+</ResponseField>
+
+```python
+ch.send("a")
+ch.send("b")
+print(ch.len())   # 2
+```
+
+## Real-world example
+
+### Concurrent weather dashboard (`weather.scl`)
+
+This script fetches weather data for four cities using the list-comprehension + `concurrency.join` pattern. Each `fetchWeather` call dispatches an HTTP request immediately; `concurrency.join` then collects all four responses concurrently, with the total wall time bounded by the slowest single request rather than the sum of all four:
+
+```python
+#!/usr/bin/env scalf --allow-net=api.openweathermap.org,wttr.in
+
+use std.http
+use std.json
+use std.concurrency
+
+cities = ["London", "Tokyo", "New York", "Sydney"]
+
+def fetchWeather(city: string) {
+  url = "https://wttr.in/{city}?format=j1"
+  response = http.get(url, 5000) or return nil
+
+  data = response.json() or return nil
+  current = data.current_condition[0] or return nil
+
+  return {
+    city: city,
+    temp: current.temp_C,
+    condition: current.weatherDesc[0].value,
+    humidity: current.humidity
+  }
+}
+
+print("🌤️  Weather Dashboard")
+print("==================================================")
+
+# Dispatch all requests immediately via list comprehension
+requests = [fetchWeather(city) for city in cities]
+
+# Wait for all of them concurrently
+results = concurrency.join(requests)
+
+for weather in results {
+  if weather == nil {
+    print("❌ Failed to fetch data")
+  } else {
+    print("\n📍 {weather.city}")
+    print("   Temperature: {weather.temp}°C")
+    print("   Condition: {weather.condition}")
+    print("   Humidity: {weather.humidity}%")
+  }
+}
+```
+
+<Tip>
+  The idiomatic SCALF concurrency pattern is:
+  1. Build a list of pending values (HTTP calls, async computations) using a list comprehension or a loop.
+  2. Pass the list to `concurrency.join(...)` to resolve everything concurrently.
+  3. Iterate over the results list in order.
+
+  This achieves full concurrency with no callbacks, no `async` functions, and no explicit thread management.
+</Tip>

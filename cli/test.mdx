@@ -1,0 +1,176 @@
+---
+title: "scalf test: Run Inline Tests in SCALF Scripts"
+sidebarTitle: "test"
+description: "Run test blocks defined with the test keyword in any SCALF script. Supports permission flags and reports pass/fail per test case."
+---
+
+SCALF has first-class support for inline tests. Any `.scl` file can contain `test` blocks alongside its regular code, and `scalf test` discovers and executes every one of them — reporting a pass/fail result per case and a final summary line.
+
+## Synopsis
+
+```bash
+scalf test <file> [permission flags]
+```
+
+Permission flags are the same as for `scalf run`:
+
+```bash
+scalf test suite.scl --allow-read=. --allow-write=. --allow-env
+scalf test suite.scl --allow-all
+```
+
+## Writing Tests
+
+Define a test using the `test` keyword followed by a quoted description string and a block body. Inside the block, use `assert` to express invariants.
+
+```python
+test "addition is commutative" {
+  assert 1 + 2 == 2 + 1
+}
+
+test "string interpolation" {
+  name = "scalf"
+  assert "hello, {name}" == "hello, scalf"
+}
+```
+
+The `assert` statement accepts an optional second argument — a string message that is included in the failure output:
+
+```python
+test "list operations" {
+  nums = [3, 1, 4, 1, 5]
+  nums.push(9)
+  assert len(nums) == 6, "expected 6 items after push"
+  assert nums[5] == 9, "last element should be 9"
+}
+```
+
+### Full Syntax
+
+```python
+test "<description>" {
+  # setup
+  # assertions: assert <condition>
+  #         or: assert <condition>, "<message>"
+}
+```
+
+## Real Example from the SCALF Test Suite
+
+The following excerpt is taken directly from `release_validation.scl`:
+
+```python
+def square(x: int) -> int {
+  return x * x
+}
+
+def is_even(x: int) -> bool {
+  return x % 2 == 0
+}
+
+test "strings_lists_maps_and_builtins" {
+  name = "scalf"
+  interpolated = "hello, {name}"
+  assert interpolated == "hello, scalf"
+
+  nums = [3, 1, 2]
+  nums.push(4)
+  popped = nums.pop()
+  mapped = nums.map(square)
+  filtered = mapped.filter(is_even)
+  reduced = mapped.reduce(add_ints, 0)
+
+  assert popped == 4
+  assert reduced == 14
+  assert filtered[0] == 4
+}
+
+test "path_fs_json_env_time_crypto" {
+  use std.path as p
+  use std.fs as files
+  use std.json as j
+
+  tmp = p.join(p.cwd(), ".validation_tmp.json")
+  payload = {name: "scalf", version: 8, ok: true}
+
+  files.write(tmp, j.stringify(payload, true))
+  assert files.exists(tmp)
+
+  decoded = j.parse(files.read(tmp))
+  assert decoded["name"] == "scalf"
+  assert decoded["version"] == 8
+
+  files.delete(tmp)
+  assert files.exists(tmp) == false
+}
+```
+
+Run the suite:
+
+```bash
+scalf test release_validation.scl --allow-all
+```
+
+## Output Format
+
+Each `test` block produces a single `PASS` or `FAIL` line using its description as the case name.
+
+**All tests pass**
+
+```
+PASS addition is commutative
+PASS string interpolation
+PASS list operations
+test result: ok. 3 passed; 0 failed
+```
+
+**A test fails**
+
+```
+PASS addition is commutative
+FAIL list operations
+error: assertion failed at suite.scl:9 — expected 6 items after push
+test result: FAILED. 1 passed; 1 failed
+```
+
+## Exit Codes
+
+| Outcome | Exit code |
+|---------|-----------|
+| All tests passed | `0` |
+| One or more tests failed | non-zero |
+
+This makes `scalf test` suitable as a CI step without any wrapper scripts.
+
+## Permission Flags
+
+Permission flags work exactly as they do for `scalf run`. Grant only the permissions your tests actually need:
+
+```bash
+# Tests that read/write files
+scalf test suite.scl --allow-read=. --allow-write=.
+
+# Tests that call environment variables and network
+scalf test suite.scl --allow-env --allow-net=jsonplaceholder.typicode.com
+
+# Grant everything (useful locally, avoid in CI)
+scalf test suite.scl --allow-all
+```
+
+<Warning>
+  `--vm` is not supported for `scalf test`. Passing it will produce an error: `test command does not support --vm yet`.
+</Warning>
+
+## Comparison with `scalf check`
+
+| | `scalf check` | `scalf test` |
+|--|---------------|--------------|
+| Executes code | No | Yes |
+| Reports type errors | Yes | Yes (during setup) |
+| Runs assertions | No | Yes |
+| Requires permission flags | No | Only if tests use I/O |
+| Exit code reflects failures | Yes | Yes |
+
+<Tip>
+  Keep tests that require network access in a separate file or gate them with a `--allow-net` flag so your offline test suite remains fast.
+</Tip>

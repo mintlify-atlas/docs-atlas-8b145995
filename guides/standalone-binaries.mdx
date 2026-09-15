@@ -1,0 +1,229 @@
+---
+title: "Building Standalone Binaries from SCALF Scripts"
+sidebarTitle: "Standalone Binaries"
+description: "Compile any SCALF script into a self-contained native binary with scalf build. Cross-compile for Linux, macOS, or Windows with target aliases."
+---
+
+`scalf build` compiles your script into a standalone executable that bundles the SCALF runtime alongside your source. The result is a single native binary you can distribute and run on any compatible machine with no runtime dependency — no `scalf` installation required, no Cargo, no dynamic libraries to manage.
+
+## Basic usage
+
+```bash
+scalf build hello.scl
+```
+
+This produces `hello` in the current directory (or `hello.exe` on Windows). The binary embeds your script and the minimal SCALF runtime needed to execute it.
+
+## Flags
+
+<ParamField path="--target" type="string">
+  Cross-compilation target, expressed as either a SCALF alias or a raw Rust
+  target triple. Accepts both `--target=<value>` and `--target <value>` forms.
+
+  ```bash
+  scalf build deploy.scl --target=linux-x64
+  scalf build deploy.scl --target=x86_64-unknown-linux-gnu
+  ```
+</ParamField>
+
+<ParamField path="--out" type="path">
+  Output path for the compiled binary. Defaults to the stem of the script
+  filename (plus `.exe` on Windows targets). Accepts both `--out=<path>` and
+  `--out <path>` forms. Parent directories are created automatically.
+
+  ```bash
+  scalf build report.scl --out=./dist/report
+  scalf build report.scl --out=./dist/report.exe
+  ```
+</ParamField>
+
+<ParamField path="--debug" type="flag">
+  Produces a debug build instead of an optimized release build. Debug binaries
+  are larger and slower but compile faster — useful during development. Without
+  this flag, `scalf build` always produces an optimized release binary.
+
+  ```bash
+  scalf build hello.scl --debug
+  ```
+</ParamField>
+
+## Target aliases
+
+SCALF provides short aliases for the most common cross-compilation targets so you don't have to memorize Rust triple strings:
+
+| Alias | Rust triple |
+|---|---|
+| `linux-x64` | `x86_64-unknown-linux-gnu` |
+| `windows-x64` | `x86_64-pc-windows-msvc` |
+| `macos-arm64` | `aarch64-apple-darwin` |
+
+Any raw Rust target triple not listed above is passed through directly to Cargo. For example, `--target=aarch64-unknown-linux-gnu` (Linux on ARM64) works without a dedicated alias.
+
+<Note>
+  Cross-compilation requires the matching Rust toolchain to be installed. Add
+  it with:
+
+  ```bash
+  rustup target add <triple>
+  ```
+
+  For example, to enable Windows cross-compilation from Linux or macOS:
+
+  ```bash
+  rustup target add x86_64-pc-windows-msvc
+  ```
+</Note>
+
+## Feature minimization
+
+Before invoking Cargo, `scalf build` statically analyses your script to determine which runtime features it actually uses. It then compiles only those features in — producing a smaller, faster binary.
+
+The three optional features detected are:
+
+- **`net`** — enabled when the script imports `std.http` or uses any URL import (`https://...`). Also enables JSON and crypto implicitly when combined.
+- **`json`** — enabled when the script imports `std.json` (and `net` is not already active).
+- **`crypto`** — enabled when the script imports `std.crypto` (and `net` is not already active).
+
+Scripts that use none of these features compile with `--no-default-features` and produce the smallest possible binaries.
+
+## Build output
+
+On success, `scalf build` prints a single summary line:
+
+```
+built standalone binary: hello (target: host, features: net)
+```
+
+- **`hello`** — the output path (from `--out` or the script stem).
+- **`target: host`** — `host` when no `--target` flag was given; the resolved triple otherwise (e.g. `x86_64-unknown-linux-gnu`).
+- **`features: net`** — the Cargo features compiled in, or `none` when the script needs no optional features.
+
+## Prerequisites
+
+`scalf build` invokes `cargo build` internally. You need:
+
+1. [Rust and Cargo](https://rustup.rs/) installed and on `PATH`.
+2. For cross-compilation: the matching target toolchain installed via `rustup target add <triple>`.
+
+The build uses the same `Cargo.toml` that ships with SCALF, so no extra manifest file is required in your project.
+
+---
+
+## Bytecode cache (`scalf cache`)
+
+If you don't need a fully standalone binary, `scalf cache` is a faster alternative: it compiles your script to `.sclc` bytecode that the SCALF VM can execute directly, skipping the parse and typecheck steps on every run.
+
+```bash
+scalf cache hello.scl
+```
+
+This produces `hello.sclc` in the current directory. Run it with:
+
+```bash
+scalf hello.sclc
+```
+
+SCALF detects the `.sclc` extension (case-insensitive) and routes the file straight to the bytecode VM — no recompilation needed.
+
+### Cache flags
+
+<ParamField path="--out" type="path">
+  Output path for the `.sclc` file. If the path has no extension, `.sclc` is
+  appended automatically. Accepts both `--out=<path>` and `--out <path>` forms.
+
+  ```bash
+  scalf cache hello.scl --out=./build/hello.sclc
+  ```
+</ParamField>
+
+### Native binary vs bytecode cache
+
+| | `scalf build` | `scalf cache` |
+|---|---|---|
+| Output | Standalone native binary | `.sclc` bytecode file |
+| Runtime required | No | Yes — `scalf` must be installed |
+| Compile time | Slower (invokes Cargo) | Fast |
+| Startup time | Native speed | Faster than source; slower than native |
+| Cross-platform | Requires target toolchain | Bytecode is portable across platforms |
+
+---
+
+## Startup benchmarking (`scalf startup`)
+
+`scalf startup` measures how long SCALF takes to lex, parse, and typecheck your script — the fixed cost paid on every execution before the first line of user code runs.
+
+```bash
+scalf startup hello.scl --iterations=25 --budget-ms=10
+```
+
+Output:
+
+```
+startup benchmark (lex+parse+typecheck, iterations=25): min=0.123ms avg=0.145ms max=0.201ms
+startup budget met: 0.123ms <= 10.000ms
+```
+
+If the minimum sample exceeds the budget, the command exits with a non-zero status:
+
+```
+startup budget not met: 12.345ms > 10.000ms (use --no-budget to skip failure)
+```
+
+### Startup flags
+
+<ParamField path="--iterations" type="integer" default="25">
+  Number of timed samples to collect. Must be ≥ 1. The command reports `min`,
+  `avg`, and `max` across all samples.
+</ParamField>
+
+<ParamField path="--budget-ms" type="float" default="10.0">
+  Maximum acceptable startup time in milliseconds, measured against the minimum
+  sample. If the minimum exceeds the budget, the command exits with an error.
+</ParamField>
+
+<ParamField path="--no-budget" type="flag">
+  Skips the budget assertion entirely. The benchmark still runs and prints
+  results; the command always exits successfully.
+</ParamField>
+
+<ParamField path="--vm" type="flag">
+  Includes VM bytecode compilation time in the benchmark, in addition to
+  lex + parse + typecheck. The output label changes to
+  `lex+parse+typecheck+vm-compile` to reflect this.
+
+  ```bash
+  scalf startup hello.scl --iterations=50 --no-budget --vm
+  ```
+</ParamField>
+
+---
+
+## Cross-compiling to Windows
+
+<Steps>
+  <Step title="Install the Windows target toolchain">
+    ```bash
+    rustup target add x86_64-pc-windows-msvc
+    ```
+  </Step>
+  <Step title="Build with the windows-x64 alias">
+    ```bash
+    scalf build hello.scl --target=windows-x64
+    ```
+  </Step>
+  <Step title="Optionally specify an output path">
+    ```bash
+    scalf build hello.scl --target=windows-x64 --out=./dist/hello.exe
+    ```
+  </Step>
+  <Step title="Verify the output">
+    SCALF prints a confirmation line on success:
+
+    ```
+    built standalone binary: dist/hello.exe (target: x86_64-pc-windows-msvc, features: none)
+    ```
+
+    The resulting `.exe` is self-contained — copy it to any Windows machine and
+    run it directly.
+  </Step>
+</Steps>

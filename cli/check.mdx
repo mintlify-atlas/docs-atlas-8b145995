@@ -1,0 +1,135 @@
+---
+title: "scalf check: Type-Check and Lint SCALF Files"
+sidebarTitle: "check"
+description: "Run SCALF's type checker and linter on a script without executing it. Surfaces type errors and lint warnings with file/line context."
+---
+
+`scalf check` runs the full lex → parse → type-check → lint pipeline on a script and reports any issues it finds — without ever executing the program. It is the fastest way to validate a file during development or in a CI gate.
+
+## Synopsis
+
+```bash
+scalf check <file>
+```
+
+## How It Works
+
+<Steps>
+  <Step title="Lex">
+    The source file is tokenised. A `LEX0001` error is reported with file, line, and column if any token is invalid.
+  </Step>
+  <Step title="Parse">
+    The token stream is parsed into an AST. Syntax errors include a source snippet with a caret marker indicating the problem location.
+  </Step>
+  <Step title="Type-check">
+    The type checker walks the entire AST and collects all type errors before stopping. Multiple errors are reported together so you can fix them in one pass.
+  </Step>
+  <Step title="Lint">
+    After a successful type-check, the linter runs a separate pass that looks for code-quality issues — things that are valid but likely unintentional. Lint warnings do not prevent a `check passed` result.
+  </Step>
+</Steps>
+
+<Note>
+  `scalf check` never executes your script. Side effects — file writes, network calls, prints — will not occur.
+</Note>
+
+## Output
+
+**All clear — no warnings**
+
+```
+check passed: hello.scl
+```
+
+**All clear — with lint warnings**
+
+```
+warning[L001]: unused variable 'tmp' at hello.scl:4:3
+check passed with 1 warning(s): hello.scl
+```
+
+**Type error**
+
+```
+error[T0012]: type mismatch
+  --> hello.scl:7:9
+  |
+7 |   result = add(1, "two")
+  |                   ^^^^^ expected int, found string
+  |
+docs: https://scalf-lang.github.io/errors/T0012
+```
+
+**Lex error**
+
+```
+lex error [LEX0001]: unexpected character '@'
+--> hello.scl:2:5
+docs: https://scalf-lang.github.io/errors/LEX0001
+```
+
+## Error Codes
+
+Every diagnostic produced by `scalf check` carries a structured error code:
+
+| Prefix | Phase | Example |
+|--------|-------|---------|
+| `LEX`  | Lexer | `LEX0001` — unexpected character |
+| `T`    | Type checker | `T0012` — type mismatch |
+| `L`    | Linter | `L001` — unused variable |
+
+Each code links to the online error reference at `https://scalf-lang.github.io/errors/<code>` for a full explanation and resolution steps.
+
+## When to Use `check` vs. Running the Script
+
+| Situation | Recommended command |
+|-----------|-------------------|
+| Fast feedback during editing | `scalf check <file>` |
+| CI type-gate before merge | `scalf check <file>` |
+| Verify formatting and types together | `scalf fmt --check <file>` then `scalf check <file>` |
+| Run tests to catch runtime failures | `scalf test <file>` |
+| Execute the script with real side effects | `scalf <file>` |
+
+`scalf check` is significantly faster than running the script in cases where the program does expensive I/O or network operations, because it exits immediately after the lint pass.
+
+## Example
+
+```python
+# math_utils.scl
+def divide(a: int, b: int) -> float {
+  return a / b
+}
+
+result: string = divide(10, 2)
+print(result)
+```
+
+```bash
+scalf check math_utils.scl
+```
+
+```
+error[T0012]: type mismatch
+  --> math_utils.scl:5:10
+  |
+5 | result: string = divide(10, 2)
+  |         ^^^^^^ expected string, found float
+  |
+docs: https://scalf-lang.github.io/errors/T0012
+```
+
+Fix the annotation and re-check:
+
+```python
+result: float = divide(10, 2)
+print(result)
+```
+
+```bash
+scalf check math_utils.scl
+# check passed: math_utils.scl
+```
+
+<Tip>
+  Pair `scalf check` with `scalf fmt --check` in your CI pipeline to enforce both type correctness and consistent formatting in a single step.
+</Tip>

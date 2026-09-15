@@ -1,0 +1,235 @@
+---
+title: "SCALF Type System: Nullable, Unions, and Generics"
+sidebarTitle: "Types"
+description: "SCALF's static type system supports nullable types, union types, generic collections, and function types — all inferred or explicitly annotated."
+---
+
+SCALF is a statically-typed language: every value has a known type, and the typechecker verifies your program before it runs. You can write annotations explicitly or let the typechecker infer them — either way, type errors are caught at check time, not at runtime. This page covers every type form available in SCALF, from the simple primitives to higher-order function types.
+
+## Primitive Types
+
+The five built-in primitive types correspond directly to the literal values you can write in source code:
+
+| Type     | Description                    | Example literals            |
+|----------|--------------------------------|-----------------------------|
+| `int`    | 64-bit signed integer          | `0`, `42`, `-7`             |
+| `float`  | 64-bit floating-point          | `3.14`, `-0.5`              |
+| `string` | UTF-8 text                     | `"hello"`, `"world"`        |
+| `bool`   | Boolean                        | `true`, `false`             |
+| `nil`    | The absence of a value         | `nil`                       |
+
+```python
+x: int    = 42
+pi: float = 3.14159
+ok: bool  = true
+name: string = "scalf"
+nothing: nil = nil
+```
+
+<Note>
+`int` is assignable to `float`. Any expression of type `int` can be used where a `float` is expected without an explicit cast.
+</Note>
+
+## Nullable Types — `T?`
+
+Appending `?` to any type creates its *nullable* variant. A nullable value is either a valid `T` or `nil`. The typechecker tracks nullability separately from the base type so you cannot accidentally dereference a potentially-nil value without handling it.
+
+```python
+maybe_user: string? = nil
+maybe_id:   int?    = 42
+```
+
+Normalisation rules:
+- `T?` expands to `T | nil` internally.
+- `T??` collapses to `T?` — double-nullability has no extra meaning.
+
+### Nil-safety operators
+
+Three operators let you work with nullable values safely:
+
+<Tabs>
+  <Tab title="?.  optional chain">
+    Accesses a member only when the value is non-nil. Returns `nil` for the entire expression otherwise — no panic.
+
+    ```python
+    profile = nil
+    shown = profile?.name    # nil — no crash
+    ```
+  </Tab>
+  <Tab title="!  panic unwrap">
+    Asserts the value is non-nil at runtime. Panics immediately if it is `nil`. Use when you are certain the value cannot be nil.
+
+    ```python
+    assert maybe_value(7)! == 7
+    ```
+  </Tab>
+  <Tab title="or  coalescing">
+    Returns the right-hand operand when the left side is `nil` (or falsy). Also supports `or return` to exit the current function early.
+
+    ```python
+    # Provide a default
+    display = maybe_user or "anon"   # "anon" when maybe_user is nil
+
+    # Early return on nil
+    content = fs.read(path) or return
+    ```
+  </Tab>
+</Tabs>
+
+A real example from `release_validation.scl` that chains all three patterns:
+
+```python
+def ensure_name(value: string?) -> string {
+  stable = value or return "missing"
+  return stable!
+}
+
+assert ensure_name(nil)     == "missing"
+assert ensure_name("scalf") == "scalf"
+```
+
+## Union Types — `A | B`
+
+A union type is a value that may hold *any one* of several types. Separate the alternatives with `|`:
+
+```python
+id: int | string = 42
+id = "user-abc"        # also valid
+
+result: int | string | nil = nil
+```
+
+The typechecker ensures every branch of a `match` expression (or every `or` chain) is consistent with the union. You can freely combine union with nullable:
+
+```python
+flexible: int? | string = nil    # int, nil, or string
+```
+
+## Generic Collection Types
+
+SCALF's two built-in generic container types are `List<T>` and `Map<K, V>`.
+
+### `List<T>`
+
+A homogeneous, ordered collection of elements of type `T`:
+
+```python
+def loadTasks() -> List<Map<string, string>> {
+  content = fs.read("tasks.json") or return []
+  return json.parse(content) or return []
+}
+
+nums: List<int> = [1, 2, 3]
+nums.push(4)
+popped = nums.pop()
+mapped   = nums.map(square)
+filtered = mapped.filter(is_even)
+reduced  = mapped.reduce(add_ints, 0)
+```
+
+### `Map<K, V>`
+
+An unordered collection of key-value pairs. In practice the key is almost always `string`:
+
+```python
+task: Map<string, string> = {
+  id:          "1",
+  description: "Write docs",
+  priority:    "high"
+}
+
+info: Map<string, int> = {version: 2, build: 99}
+```
+
+<Tip>
+Map literals use bare identifier keys (`name: "Alice"`), but the key type at runtime is always `string`. You can also access values with bracket notation: `task["priority"]`.
+</Tip>
+
+## Function Types — `(A, B) -> R`
+
+Functions are first-class values in SCALF. Their type is written as a parenthesised parameter list followed by `->` and the return type:
+
+```python
+# A function that takes two ints and returns an int
+apply: (int, int) -> int = def(a: int, b: int) -> int {
+  return a + b
+}
+
+# A function that takes no arguments and returns an int
+counter_inc: () -> int
+```
+
+The typechecker verifies that the concrete function assigned to such a variable has a compatible signature. You can pass functions as arguments to other functions:
+
+```python
+def square(x: int) -> int {
+  return x * x
+}
+
+mapped = [1, 2, 3].map(square)    # List<int> — [1, 4, 9]
+```
+
+## Type Annotations
+
+### On variables
+
+```python
+x: int          = 5
+label: string   = "hello"
+ratio: float    = 0.5
+flags: List<bool> = [true, false, true]
+```
+
+### On function parameters and return types
+
+```python
+def add(a: int, b: int) -> int {
+  return a + b
+}
+
+def is_even(x: int) -> bool {
+  return x % 2 == 0
+}
+
+def saveTasks(tasks: List<Map<string, string>>) {
+  content = json.stringify(tasks, true)
+  fs.write("tasks.json", content)
+}
+```
+
+When the return type is omitted, SCALF infers it from the function body.
+
+## Destructuring Declarations
+
+You can destructure lists and maps directly in a declaration. The types of the bound variables are inferred from the right-hand side:
+
+```python
+# List pattern
+[first, _] = [9, 8]             # first: int = 9
+
+# Map pattern
+{name: nm, version: ver} = {name: "scalf", version: 2}
+# nm: string = "scalf", ver: int = 2
+```
+
+The `_` wildcard discards a positional element without binding it.
+
+## How the Typechecker Runs
+
+The typechecker runs automatically as part of `scalf` execution — you never invoke it separately for normal use. It resolves all annotations, infers unannotated bindings, checks function call arities, validates pattern exhaustiveness in `match` expressions, and enforces nil-safety before a single line of code executes.
+
+```bash
+# Explicit type check only (no execution)
+scalf check myprogram.scl
+```
+
+<Warning>
+A type error surfaces as a compile-time diagnostic rather than a runtime crash. Fix the reported type mismatch before running the program.
+</Warning>
+
+You can also run the formatter, which is aware of types:
+
+```bash
+scalf fmt myprogram.scl          # format in place
+scalf fmt --check myprogram.scl  # exit 1 if formatting is needed
+```

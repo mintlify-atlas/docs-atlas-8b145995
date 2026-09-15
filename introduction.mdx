@@ -1,0 +1,58 @@
+---
+title: "SCALF: Predictable Scripting Without Dependency Hell"
+sidebarTitle: "Introduction"
+description: "SCALF is a statically-typed scripting language with a built-in permission sandbox, formatter, test runner, and standalone binary builder — no setup required."
+---
+
+SCALF is a scripting language built for predictability. Where other scripting ecosystems demand package managers, lockfiles managed by convention, and runtime surprises, SCALF takes a different path: static types catch mistakes before execution, a built-in permission sandbox blocks unexpected filesystem or network access, and every tool you need — formatter, type checker, test runner, standalone binary builder — ships inside the single `scalf` binary. There is nothing to install beyond the runtime itself. SCALF is implemented in Rust and designed to start fast, stay lean, and behave the same way every time.
+
+<CardGroup cols={2}>
+  <Card title="Secure by Default" icon="shield-halved">
+    Every script runs in a permission sandbox. Filesystem reads and writes, network calls, and environment access are all denied unless explicitly granted via flags such as `--allow-read`, `--allow-net`, or `--allow-all`.
+  </Card>
+  <Card title="Zero Setup" icon="bolt">
+    No package manager, no virtual environments, no global registries. Drop a `.scl` file anywhere and run it with `scalf`. External libraries can be imported directly from a URL — versioned, cached, and integrity-verified automatically.
+  </Card>
+  <Card title="Static Types" icon="magnifying-glass-chart">
+    SCALF's type system supports nullable types (`T?`), union types (`A | B`), generics (`List<T>`, `Map<K,V>`), and function types (`(A, B) -> R`). The type checker runs automatically on every execution — there is no separate compile step.
+  </Card>
+  <Card title="Built-in Tooling" icon="wrench">
+    `scalf fmt` formats your code. `scalf check` runs the type checker and linter. `scalf test` discovers and executes `test` blocks. `scalf docs` generates stdlib reference documentation. No third-party tools required.
+  </Card>
+  <Card title="Standalone Binaries" icon="box-archive">
+    `scalf build` compiles any script into a self-contained native binary. It auto-detects which runtime features the script uses (network, JSON, crypto) and links only what is needed, keeping output sizes small. Target aliases `linux-x64`, `windows-x64`, and `macos-arm64` are built in.
+  </Card>
+  <Card title="URL Imports" icon="link">
+    Import any SCALF module directly from a URL: `use "https://example.com/lib.scl@v1" as lib`. Modules are downloaded once, content-addressed with SHA-256, and written to a lockfile so subsequent runs are fully reproducible and offline-capable.
+  </Card>
+  <Card title="Bytecode VM" icon="microchip">
+    An optional stack-based bytecode VM (`scalf --vm`) compiles scripts to an instruction set with constant folding. Bytecode can be cached to a `.sclc` file for faster subsequent runs. A startup benchmark command (`scalf startup`) measures parse-and-typecheck latency against a configurable time budget.
+  </Card>
+  <Card title="Interactive REPL" icon="terminal">
+    Running `scalf` with no arguments drops into a full-featured REPL with multi-line input, syntax highlighting, tab completion (`:complete`), inline documentation (`:doc`), persistent history, and evaluation timing output.
+  </Card>
+</CardGroup>
+
+## How SCALF Was Built
+
+SCALF was developed incrementally across eight phases, each adding a cohesive layer of capability.
+
+**Phase 1** established the language foundations: a lexer for all core token types, a recursive-descent parser covering expressions and statements, control-flow constructs (`if/else`, `while`, `for...in`, C-style `for`), function definitions and returns, and a working REPL that runs the full lex → parse → typecheck → evaluate loop.
+
+**Phase 2** introduced the full type model: nullable types, unions, generics, and function types. Type annotation syntax was added to the parser, and an assignability-checking type inference pass was wired into both the REPL and CLI. Phase 2 also added several important syntax features: `def`/`return`, `value or default`, `or return err`, optional chaining with `?.`, postfix panic-unwrap with `!`, `match` expressions, and destructuring patterns.
+
+**Phase 3** delivered the runtime interpreter: full execution of statements, expressions, functions, and module calls. List comprehensions, `use` imports for standard library modules, string methods (`trim`, `split`, `replace`, `uppercase`, `lowercase`), list methods (`push`, `pop`, `map`, `filter`, `reduce`, `sort`, `sorted`), and map methods (`get`, `set`, `has`, `keys`, `values`) were all implemented. Eight built-in standard library modules were added: `math`, `fs`, `json`, `path`, `env`, `http`, `time`, and `crypto`.
+
+**Phase 4** introduced the permission model. The CLI flags `--allow-read`, `--allow-write`, `--allow-net`, `--allow-env`, `--allow-all`, and `--prompt-permissions` were implemented, and the runtime enforces them at every filesystem, network, and environment access point. The `http` module was also completed, supporting `get`, `post`, `put`, and `delete` with optional headers and timeouts. HTTP requests start immediately and resolve lazily so independent requests can overlap.
+
+**Phase 5** added URL imports with content-addressed caching (SHA-256), lockfile generation and verification, and version pinning via the `@version` suffix. Namespace isolation ensures URL-imported modules cannot accidentally shadow local bindings.
+
+**Phase 6** improved the developer experience with richer diagnostics: error codes, doc links, stack traces, concrete values in failure messages, and `did you mean …` suggestions for common lookup mistakes. The `scalf fmt`, `scalf check`, and `scalf test` subcommands were also introduced in this phase.
+
+**Phase 7** delivered the bytecode VM and the standalone build system. The VM uses a stack-based instruction set with constant folding and is accessible via `scalf --vm`. `scalf build` embeds a script's source into a native binary, auto-selects Cargo features, and supports cross-compilation via target aliases or raw triples. A startup benchmark command measures cold-start performance against a time budget.
+
+**Phase 8** added concurrency helpers (`concurrency.await`, `concurrency.join`, `concurrency.timeout`, and channels) and significantly improved the REPL with multi-line input, syntax highlighting, tab completion, persistent history, evaluation timing, and inline documentation.
+
+<Note>
+  The SCALF CLI binary is named `scalf`. Source files use the `.scl` extension. Pre-compiled bytecode cache files use the `.sclc` extension.
+</Note>

@@ -1,0 +1,111 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "SCALF",
+  "projectDescription": "SCALF is a scripting language focused on predictability and zero-setup workflows — no dependency hell, secure by default, with a built-in type system, REPL, formatter, test runner, and standalone binary builder.",
+  "theme": "palm",
+  "primaryColor": "#c94f2d",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Language",
+            "pages": [
+              "language/syntax",
+              "language/types",
+              "language/control-flow",
+              "language/functions",
+              "language/modules"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/run",
+              "cli/fmt",
+              "cli/check",
+              "cli/test",
+              "cli/build",
+              "cli/repl"
+            ]
+          },
+          {
+            "group": "Standard Library",
+            "pages": [
+              "stdlib/overview",
+              "stdlib/fs",
+              "stdlib/http",
+              "stdlib/json",
+              "stdlib/math",
+              "stdlib/path",
+              "stdlib/env",
+              "stdlib/time",
+              "stdlib/crypto",
+              "stdlib/concurrency"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/permissions",
+              "guides/url-imports",
+              "guides/standalone-binaries"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Statically-typed scripting language with nullable, union, and generic types",
+    "Permission model for sandboxed execution (--allow-read, --allow-write, --allow-net, --allow-env)",
+    "Built-in formatter (scalf fmt), type checker (scalf check), and test runner (scalf test)",
+    "URL imports with content-addressed cache and lockfile verification",
+    "Standalone binary builder that embeds scripts into self-contained executables",
+    "Bytecode VM with optional --vm execution path",
+    "Full-featured REPL with syntax highlighting, completion, persistent history, and inline docs",
+    "Built-in standard library: fs, http, json, math, path, env, time, crypto, concurrency",
+    "Grapheme-aware string operations",
+    "Lazy HTTP concurrency — requests start immediately and resolve lazily"
+  ],
+  "publicApiSurface": [
+    "scalf <file>",
+    "scalf --vm <file>",
+    "scalf fmt [--check] <file>",
+    "scalf check <file>",
+    "scalf test <file> [permission flags]",
+    "scalf build <file> [--target=<alias|triple>] [--out=<path>]",
+    "scalf cache <file> [--out=<path>]",
+    "scalf startup <file> [--iterations=<n>] [--budget-ms=<ms>]",
+    "scalf docs [--out=<path>]",
+    "--allow-read=<paths>",
+    "--allow-write=<paths>",
+    "--allow-net=<domains>",
+    "--allow-env",
+    "--allow-all",
+    "--prompt-permissions",
+    "use std.fs as fs",
+    "use std.http as http",
+    "use std.json as json",
+    "use std.math as m",
+    "use std.path as p",
+    "use std.env as e",
+    "use std.time as t",
+    "use std.crypto as crypto",
+    "use std.concurrency as c",
+    "use \"https://...\" as lib",
+    "use \"./local.scl\" as mod"
+  ]
+}
