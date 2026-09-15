@@ -1,7 +1,7 @@
 ---
 title: "std.concurrency: Async Values and Channels in SCALF"
-sidebarTitle: "concurrency"
-description: "Resolve async values, join concurrent requests, set timeouts, and pass data between contexts using SCALF's concurrency helpers."
+sidebarTitle: "Concurrency"
+description: "Resolve async values, join concurrent requests, set timeouts, and pass data between contexts using SCALF's built-in concurrency module."
 ---
 
 The `std.concurrency` module contains the runtime helpers that make SCALF's lazy concurrency model practical to work with. SCALF does not require `async`/`await` keywords — values like HTTP responses start resolving in the background as soon as they are created. The `concurrency` module provides the tools to wait for those values, collect many of them at once, impose time limits, and pass data between contexts using channels.

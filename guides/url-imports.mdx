@@ -1,7 +1,7 @@
 ---
 title: "URL Imports: Remote Modules with Lockfile Integrity"
 sidebarTitle: "URL Imports"
-description: "Import remote SCALF modules directly from URLs. SCALF caches them content-addressed via SHA-256 and verifies integrity on subsequent runs using a lockfile."
+description: "Import remote SCALF modules directly from URLs. SCALF caches them SHA-256 content-addressed and verifies integrity on every run via a lockfile."
 ---
 
 SCALF can import modules directly from remote URLs, similar to how Deno resolves dependencies. The first time a URL import is encountered, SCALF fetches the source over the network, computes a SHA-256 digest, writes the content to a local cache, and records the hash in a lockfile. Every subsequent run reads from the cache and verifies the stored hash — the network is not touched again unless the cache is cold.
@@ -38,7 +38,7 @@ print(lib.version)
 
     1. Computes the SHA-256 digest of the raw source text.
     2. Writes the source to the content-addressed cache at
-       `$HOME/.rask/cache/modules/<sha256>.rask`.
+       `$HOME/.scl/cache/modules/<sha256>.scl`.
     3. Creates (or updates) a lockfile called `.scl.lock` in the current working
        directory, recording the URL and its digest.
   </Step>
@@ -55,20 +55,20 @@ print(lib.version)
 
 ### Cache directory
 
-The default cache location is `$HOME/.rask/cache/modules/`. Override it by
-setting the `RASK_CACHE_DIR` environment variable:
+The default cache location is `$HOME/.scl/cache/modules/`. Override it by
+setting the `scalf_CACHE_DIR` environment variable:
 
 ```bash
-RASK_CACHE_DIR=/opt/scalf-cache scalf --allow-net=example.com script.scl
+scalf_CACHE_DIR=/opt/scalf-cache scalf --allow-net=example.com script.scl
 ```
 
 ### Lockfile
 
 The lockfile is written to `.scl.lock` in the current directory by default.
-Override the path with the `RASK_LOCKFILE` environment variable:
+Override the path with the `scalf_LOCKFILE` environment variable:
 
 ```bash
-RASK_LOCKFILE=./locks/project.scl.lock scalf --allow-net=example.com script.scl
+scalf_LOCKFILE=./locks/project.scl.lock scalf --allow-net=example.com script.scl
 ```
 
 Commit `.scl.lock` to version control. It is the source of truth for

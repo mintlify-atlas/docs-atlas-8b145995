@@ -1,7 +1,7 @@
 ---
-title: "SCALF Syntax and Basic Expressions"
+title: "SCALF Syntax: Variables, Operators, and Expressions"
 sidebarTitle: "Syntax"
-description: "Learn SCALF's expression syntax, variable declarations, string interpolation, list and map literals, and pattern matching."
+description: "Learn SCALF's syntax: variable declarations, string interpolation, arithmetic operators, list and map literals, pattern matching, and nil safety."
 ---
 
 SCALF uses a clean, Python-inspired syntax that is easy to read but carries the guarantees of a statically-typed language. Every `.scl` file is a program made up of statements — variable declarations, function definitions, control-flow blocks, expressions, and more. This page walks through the core syntax building blocks you will use in every SCALF program.
@@ -102,20 +102,27 @@ SCALF provides the standard set of arithmetic and comparison operators:
     assert 10 >= 10
     ```
   </Tab>
-  <Tab title="Boolean">
-    | Operator | Description   | Example                    |
-    |----------|---------------|----------------------------|
-    | `and`    | Logical AND   | `true and false` → `false` |
-    | `or`     | Logical OR    | `false or true` → `true`   |
-    | `!`      | Logical NOT   | `!true` → `false`          |
+  <Tab title="Boolean and Coalescing">
+    | Operator | Description             | Example                       |
+    |----------|-------------------------|-------------------------------|
+    | `and`    | Logical AND             | `true and false` → `false`    |
+    | `!`      | Logical NOT             | `!true` → `false`             |
+    | `or`     | Nil/falsy coalescing    | `nil or "default"` → `"default"` |
 
     ```python
     logged_in = true
     has_role  = false
     can_edit  = logged_in and has_role    # false
-    visible   = logged_in or has_role     # true
-    hidden    = !visible                  # false
+    hidden    = !logged_in                # false
+
+    # or is a coalescing operator: returns the right side when the left is nil or falsy
+    display = nil or "guest"    # "guest"
+    count   = result or 0       # 0 when result is nil
     ```
+
+    <Note>
+    `or` is a coalescing operator, not a symmetric boolean OR. It evaluates the right-hand side only when the left-hand side is `nil` or falsy. For a strict boolean disjunction, combine `!` and `and`: `!(a and !b)`. See [Nil Safety](/language/syntax#optional-chaining-and-nil-safety) for the full `or` / `or return` semantics.
+    </Note>
   </Tab>
 </Tabs>
 

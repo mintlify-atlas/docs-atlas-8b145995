@@ -1,7 +1,7 @@
 ---
-title: "scalf fmt: Format SCALF Source Files"
-sidebarTitle: "fmt"
-description: "Automatically format SCALF source files with scalf fmt. Use --check in CI to verify formatting without writing changes."
+title: "scalf fmt: Auto-Format and Lint-Check SCALF Source Files"
+sidebarTitle: "Fmt"
+description: "Automatically reformat SCALF source files in-place with scalf fmt. Use --check in CI pipelines to verify formatting without writing any changes."
 ---
 
 `scalf fmt` is the official code formatter for SCALF. It parses your source file, runs it through the canonical pretty-printer, and writes the result back in-place. Because the formatter works from the parsed AST, it is guaranteed to produce syntactically valid output that is semantically identical to the original.

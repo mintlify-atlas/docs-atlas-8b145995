@@ -1,7 +1,7 @@
 ---
-title: "Install SCALF on Linux, macOS, and Windows"
+title: "Install SCALF on Linux, macOS, and Windows via Cargo"
 sidebarTitle: "Installation"
-description: "Build and install the SCALF scripting language runtime from source using Cargo. Requires Rust 1.75+ and takes under a minute."
+description: "Build and install the SCALF scripting language runtime from source using Cargo. Requires Rust 1.75 or later and completes in under a minute."
 ---
 
 SCALF is distributed as source code and built with [Cargo](https://rustup.rs), the Rust package manager. There are no pre-built binaries available yet, so you will need a working Rust toolchain (version 1.75 or later) before you begin. If you have not installed Rust, the fastest way is through [rustup.rs](https://rustup.rs), which manages Rust versions and the `cargo` build tool on Linux, macOS, and Windows. The entire build takes under a minute on a modern machine.
@@ -52,19 +52,27 @@ SCALF is distributed as source code and built with [Cargo](https://rustup.rs), t
   </Step>
 
   <Step title="Verify the installation">
-    Confirm that `scalf` is accessible and prints its help output:
+    Confirm that `scalf` is accessible by running a one-line script:
 
     ```bash
-    scalf --help
+    echo 'print("Hello, scalf!")' | scalf /dev/stdin
     ```
 
-    If you used `cargo build --release` instead of `cargo install`, run the binary directly:
+    Or create a minimal `.scl` file and run it:
 
     ```bash
-    ./target/release/scalf --help
+    echo 'print("Hello, scalf!")' > verify.scl
+    scalf verify.scl
     ```
 
-    You should see the list of available flags and subcommands. If the command is not found after `cargo install`, make sure `~/.cargo/bin` is in your `PATH`.
+    You should see `Hello, scalf!` printed to stdout. If you used `cargo build --release` instead of `cargo install`, prefix the path to the binary:
+
+    ```bash
+    echo 'print("Hello, scalf!")' > verify.scl
+    ./target/release/scalf verify.scl
+    ```
+
+    If the command is not found after `cargo install`, make sure `~/.cargo/bin` is in your `PATH`.
   </Step>
 </Steps>
 
